@@ -1,0 +1,15 @@
+server:
+    port: 5004
+
+spring:
+  application:
+    name: location-service
+
+  datasource:
+    url: jdbc:oracle:thin:@localhost:1521/ORCL21PDB1
+    username: airline_location_db
+    password: 123456
+    driver-class-name: oracle.jdbc.OracleDriver
+  jpa:
+    hibernate:
+        ddl-auto: update
