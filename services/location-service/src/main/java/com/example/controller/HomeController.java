@@ -1,4 +1,4 @@
-package com.example.location_service.controller;
+package com.example.controller;
 
 
 import com.example.payload.response.ApiResponse;
