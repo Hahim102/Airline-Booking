@@ -1,8 +1,8 @@
 package com.example.controller;
 
 
-import com.example.model.User;
 import com.example.payload.dto.UserDTO;
+import com.example.payload.response.UserResponse;
 import com.example.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -17,20 +17,20 @@ public class UserController {
     public final UserService userService;
 
     @GetMapping("/profile")
-    public ResponseEntity<UserDTO> getUserProfile(@RequestHeader("X-User-Email") String email) throws Exception {
-            UserDTO user = userService.getUserByEmail(email);
+    public ResponseEntity<UserResponse> getUserProfile(@RequestHeader("X-User-Email") String email) throws Exception {
+            UserResponse user = userService.getUserByEmail(email);
             return ResponseEntity.ok(user);
     }
 
     @GetMapping("/{userId}")
-    public ResponseEntity<UserDTO> getUserById(@PathVariable Long userId) throws Exception {
-        UserDTO user = userService.getUserById(userId);
+    public ResponseEntity<UserResponse> getUserById(@PathVariable Long userId) throws Exception {
+        UserResponse user = userService.getUserById(userId);
         return ResponseEntity.ok(user);
     }
 
     @GetMapping()
-    public ResponseEntity<List<UserDTO>> getUsers() {
-        List<UserDTO> users = userService.getAllUsers();
+    public ResponseEntity<List<UserResponse>> getUsers() {
+        List<UserResponse> users = userService.getAllUsers();
         return ResponseEntity.ok(users);
     }
 }

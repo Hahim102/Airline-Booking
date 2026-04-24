@@ -2,11 +2,12 @@ package com.example.service;
 
 
 import com.example.payload.dto.UserDTO;
+import com.example.payload.response.UserResponse;
 
 import java.util.List;
 
 public interface UserService {
-    UserDTO getUserByEmail(String email) throws Exception;
-    UserDTO getUserById(Long id) throws Exception;
-    List<UserDTO> getAllUsers();
+    UserResponse getUserByEmail(String email) throws Exception;
+    UserResponse getUserById(Long id) throws Exception;
+    List<UserResponse> getAllUsers();
 }

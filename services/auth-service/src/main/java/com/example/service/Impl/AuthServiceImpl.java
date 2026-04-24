@@ -2,24 +2,27 @@ package com.example.service.Impl;
 
 import com.example.config.JwtProvider;
 import com.example.enums.UserRole;
-import com.example.mapper.UserMapper;
-import com.example.model.User;
+import com.example.model.Users;
 import com.example.payload.dto.UserDTO;
 import com.example.payload.response.AuthResponse;
+import com.example.payload.response.UserResponse;
 import com.example.repository.UserRepository;
 import com.example.service.AuthService;
 import com.example.service.UserDetailService;
+import com.example.util.ModelMapperUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
 
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
@@ -37,14 +40,14 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse register(UserDTO request) throws Exception {
-        User existingUsers = userRepository.findByEmail(request.getEmail());
+        Users existingUsers = userRepository.findByEmail(request.getEmail());
         if (existingUsers != null) {
             throw new Exception("Email already exists");
         }
         if (request.getRole() == UserRole.ROLE_SYSTEM_ADMIN) {
             throw new Exception("Role system admin is not allowed");
         }
-        User newUsers = User.builder()
+        Users newUsers = Users.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .phone(request.getPhone())
@@ -54,7 +57,8 @@ public class AuthServiceImpl implements AuthService {
                 .updatedAt(LocalDateTime.now())
                 .lastLoginAt(LocalDateTime.now())
                 .build();
-        User savedUsers = userRepository.save(newUsers);
+        Users savedUsers = userRepository.save(newUsers);
+        UserResponse userResponse = ModelMapperUtil.mapper(savedUsers, UserResponse.class);
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 savedUsers.getEmail(), savedUsers.getPassword()
@@ -65,7 +69,7 @@ public class AuthServiceImpl implements AuthService {
 
         AuthResponse authResponse = new AuthResponse();
         authResponse.setToken(jwt);
-        authResponse.setUser(UserMapper.toDTO(savedUsers));
+        authResponse.setUser(userResponse);
         authResponse.setTitle("Hello " + savedUsers.getFullName());
         authResponse.setMessage("Registration successful");
 
@@ -83,14 +87,16 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse login(String email, String password) throws Exception {
         Authentication authentication = authenticate(email, password);
-        User users = userRepository.findByEmail(email);
+        Users users = userRepository.findByEmail(email);
         users.setLastLoginAt(LocalDateTime.now());
         userRepository.save(users);
+
+        UserResponse userResponse = ModelMapperUtil.mapper(users, UserResponse.class);
 
         String jwt = new JwtProvider().generateToken(authentication, users.getId());
         AuthResponse authResponse = new AuthResponse();
         authResponse.setToken(jwt);
-        authResponse.setUser(UserMapper.toDTO(users));
+        authResponse.setUser(userResponse);
         authResponse.setTitle("Hello " + users.getFullName());
         authResponse.setMessage("Login successful");
         return authResponse;

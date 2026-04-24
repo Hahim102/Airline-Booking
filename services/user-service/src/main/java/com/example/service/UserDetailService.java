@@ -1,7 +1,7 @@
 package com.example.service;
 
 
-import com.example.model.User;
+import com.example.model.Users;
 import com.example.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
@@ -21,17 +21,17 @@ public class UserDetailService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userRepository.findByEmail(email);
+        Users users = userRepository.findByEmail(email);
 
-        if (user == null) {
+        if (users == null) {
             throw new UsernameNotFoundException("User not found with email: " + email);
         }
-        GrantedAuthority grantedAuthority = new SimpleGrantedAuthority(user.getRole().toString());
+        GrantedAuthority grantedAuthority = new SimpleGrantedAuthority(users.getRole().toString());
         Collection<GrantedAuthority> grantedAuthorities = Collections.singleton(grantedAuthority);
 
         return new org.springframework.security.core.userdetails.User(
-                user.getEmail(),
-                user.getPassword(),
+                users.getEmail(),
+                users.getPassword(),
                 grantedAuthorities
         );
     }

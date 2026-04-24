@@ -1,4 +1,4 @@
-package com.example.payload.dto;
+package com.example.payload.response;
 
 
 import com.example.enums.UserRole;
@@ -13,12 +13,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UserDTO {
+public class UserResponse {
     private String email;
-    private String password;
     private String fullName;
     private String phone;
     private UserRole role;
     private LocalDateTime lastLoginAt;
-
 }
