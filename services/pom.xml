@@ -19,6 +19,7 @@
         <module>user-service</module>
         <module>location-service</module>
         <module>auth-service</module>
+        <module>notification-service</module>
     </modules>
 
 

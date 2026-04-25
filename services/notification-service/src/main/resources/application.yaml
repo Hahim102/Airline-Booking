@@ -1,0 +1,29 @@
+server:
+  port: 5003
+
+spring:
+  application:
+    name: notification-service
+
+  mail:
+    default-encoding: UTF-8
+    host: smtp.gmail.com
+    username: baotrung040699@gmail.com
+    password: fqoq xvhv qcky xdgj
+    port: 587
+    protocol: smtp
+    test-connection: false
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  springdoc:
+    swagger-ui:
+      path: /swagger-ui.html
+
+  logging:
+    level:
+      root: info

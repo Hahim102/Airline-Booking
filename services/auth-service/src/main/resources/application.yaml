@@ -9,6 +9,3 @@ spring:
     username: airline_auth_db
     password: 123456
     driver-class-name: oracle.jdbc.OracleDriver
-  jpa:
-    hibernate:
-      ddl-auto: update

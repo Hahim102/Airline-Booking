@@ -11,6 +11,7 @@
         <module name="common-lib" />
         <module name="user-service" />
         <module name="location-service" />
+        <module name="notification-service" />
       </profile>
     </annotationProcessing>
   </component>
@@ -19,6 +20,7 @@
       <module name="auth-service" options="-parameters" />
       <module name="common-lib" options="-parameters" />
       <module name="location-service" options="-parameters" />
+      <module name="notification-service" options="-parameters" />
       <module name="user-service" options="-parameters" />
     </option>
   </component>
