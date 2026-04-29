@@ -1,0 +1,36 @@
+server:
+  port: 5000
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: true
+          routes:
+            - id: AUTH-SERVICE
+              uri: "lb://AUTH-SERVICE"
+              predicates:
+                - Path= /api/auth/**
+
+            - id: USER-SERVICE
+              uri: "lb://USER-SERVICE"
+              predicates:
+                - Path= /api/users/**
+
+            - id: NOTIFICATION-SERVICE
+              uri: "lb://NOTIFICATION-SERVICE"
+              predicates:
+                - Path= /api/notification/**
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: "http://localhost:8070/eureka/"

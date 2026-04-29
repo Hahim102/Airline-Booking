@@ -8,17 +8,21 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="auth-service" />
+        <module name="location-service" />
+        <module name="api-gateway" />
         <module name="common-lib" />
         <module name="user-service" />
-        <module name="location-service" />
+        <module name="eureka-server" />
         <module name="notification-service" />
       </profile>
     </annotationProcessing>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="api-gateway" options="-parameters" />
       <module name="auth-service" options="-parameters" />
       <module name="common-lib" options="-parameters" />
+      <module name="eureka-server" options="-parameters" />
       <module name="location-service" options="-parameters" />
       <module name="notification-service" options="-parameters" />
       <module name="user-service" options="-parameters" />

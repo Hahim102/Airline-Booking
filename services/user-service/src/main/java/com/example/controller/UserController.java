@@ -6,6 +6,7 @@ import com.example.payload.response.UserResponse;
 import com.example.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,6 +21,13 @@ public class UserController {
     public ResponseEntity<UserResponse> getUserProfile(@RequestHeader("X-User-Email") String email) throws Exception {
             UserResponse user = userService.getUserByEmail(email);
             return ResponseEntity.ok(user);
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<UserResponse> getMypProfile(Authentication authentication) throws Exception {
+        String email = authentication.getName();
+        UserResponse user = userService.getUserByEmail(email);
+        return ResponseEntity.ok(user);
     }
 
     @GetMapping("/{userId}")
