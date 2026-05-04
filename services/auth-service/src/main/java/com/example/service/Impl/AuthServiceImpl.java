@@ -15,11 +15,11 @@ import com.example.repository.UserRepository;
 import com.example.service.AuthService;
 import com.example.service.UserDetailService;
 import com.example.util.ModelMapperUtil;
-import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -41,6 +41,7 @@ public class AuthServiceImpl implements AuthService {
     private final BlacklistedTokenRepository blacklistedTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtProvider jwtProvider;
+    private final AuthenticationManager authenticationManager;
 
     /*
     1. Check if email exists in the database
@@ -57,14 +58,11 @@ public class AuthServiceImpl implements AuthService {
         if (existingUsers != null) {
             throw new Exception("Email already exists");
         }
-        if (request.getRole() == UserRole.ROLE_SYSTEM_ADMIN) {
-            throw new Exception("Role system admin is not allowed");
-        }
         Users newUsers = Users.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .phone(request.getPhone())
-                .role(request.getRole())
+                .role(UserRole.ROLE_USER)
                 .fullName(request.getFullName())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -115,9 +113,11 @@ public class AuthServiceImpl implements AuthService {
     5. Return AuthResponse with token and user details
     */
 
+
     @Override
     public AuthResponse login(String email, String password, HttpServletResponse response) throws Exception {
-        Authentication authentication = authenticate(email, password);
+        Authentication authentication = authenticationManager.
+                authenticate(new UsernamePasswordAuthenticationToken(email, password));
         Users users = userRepository.findByEmail(email);
         users.setLastLoginAt(LocalDateTime.now());
         userRepository.save(users);
@@ -149,14 +149,6 @@ public class AuthServiceImpl implements AuthService {
         return authResponse;
     }
 
-    private Authentication authenticate(String email, String password) throws Exception {
-        UserDetails userDetails = userDetailService.loadUserByUsername(email);
-
-        if (!passwordEncoder.matches(password, userDetails.getPassword())) {
-            throw new Exception("Invalid password");
-        }
-        return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-    }
     @Override
     public void logout(HttpServletRequest request, HttpServletResponse response, String accessToken) {
         try {

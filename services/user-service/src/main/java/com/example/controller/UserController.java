@@ -24,8 +24,7 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getMypProfile(Authentication authentication) throws Exception {
-        String email = authentication.getName();
+    public ResponseEntity<UserResponse> getMypProfile(@RequestHeader("X-User-Email") String email) throws Exception {
         UserResponse user = userService.getUserByEmail(email);
         return ResponseEntity.ok(user);
     }
