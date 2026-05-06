@@ -6,6 +6,7 @@ import com.example.jwt.JwtUtils;
 import com.example.model.BlacklistedToken;
 import com.example.model.RefreshToken;
 import com.example.model.Users;
+import com.example.payload.dto.PasswordDTO;
 import com.example.payload.dto.UserDTO;
 import com.example.payload.response.AuthResponse;
 import com.example.payload.response.UserResponse;
@@ -54,7 +55,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse register(UserDTO request, HttpServletResponse response) throws Exception {
-        Users existingUsers = userRepository.findByEmail(request.getEmail());
+        Users existingUsers = userRepository.findByEmailAndDeletedIsFalse(request.getEmail());
         if (existingUsers != null) {
             throw new Exception("Email already exists");
         }
@@ -63,12 +64,15 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .phone(request.getPhone())
                 .role(UserRole.ROLE_USER)
+                .active(true)
+                .deleted(false)
                 .fullName(request.getFullName())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .lastLoginAt(LocalDateTime.now())
                 .build();
         Users savedUsers = userRepository.save(newUsers);
+
         UserResponse userResponse = ModelMapperUtil.mapper(savedUsers, UserResponse.class);
 
         UserDetails userDetails = userDetailService.loadUserByUsername(savedUsers.getEmail());
@@ -118,7 +122,10 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse login(String email, String password, HttpServletResponse response) throws Exception {
         Authentication authentication = authenticationManager.
                 authenticate(new UsernamePasswordAuthenticationToken(email, password));
-        Users users = userRepository.findByEmail(email);
+        Users users = userRepository.findByEmailAndDeletedIsFalse(email);
+        if (users == null) {
+            throw new RuntimeException("User not found");
+        }
         users.setLastLoginAt(LocalDateTime.now());
         userRepository.save(users);
 
@@ -197,14 +204,16 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
 
         if (token.getExpiryDate().before(new Date())) {
-            refreshTokenRepository.delete(token);
+            refreshTokenRepository.deleteById(token.getId());
             throw new RuntimeException("Refresh token expired");
         }
 
         Users user = userRepository.findById(token.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .filter(u -> u.isActive() && !u.isDeleted())
+                .orElseThrow(() -> new RuntimeException("User is inactive or deleted"));
 
-        refreshTokenRepository.delete(token);
+        refreshTokenRepository.deleteById(token.getId());
+
 
         String newRefreshToken = jwtProvider.generateRefreshToken(user.getId());
 
@@ -216,6 +225,7 @@ public class AuthServiceImpl implements AuthService {
                         new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000)
                 )
         );
+
 
         Cookie cookie = new Cookie("refreshToken", newRefreshToken);
         cookie.setHttpOnly(true);
@@ -240,6 +250,46 @@ public class AuthServiceImpl implements AuthService {
         res.setUser(ModelMapperUtil.mapper(user, UserResponse.class));
 
         return res;
+    }
+
+    @Override
+    public void updatePassword(Long userId, PasswordDTO passwordDTO) throws Exception {
+        Users user = userRepository.findById(userId)
+                .orElseThrow(() -> new Exception("User not found with id: " + userId));
+        if (!passwordEncoder.matches(passwordDTO.getCurrentPassword(), user.getPassword())) {
+            throw new Exception("Wrong password");
+        }
+
+        user.setPassword(passwordEncoder.encode(passwordDTO.getNewPassword()));
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+    }
+
+    @Override
+    public AuthResponse updateProfile(Long userId, UserDTO userDTO) throws Exception {
+        Users user = userRepository.findById(userId)
+                .orElseThrow();
+
+        Users existing = userRepository.findByEmailAndDeletedIsFalse(userDTO.getEmail());
+        if (existing != null && !existing.getId().equals(userId)) {
+            throw new RuntimeException("Email already in use");
+        }
+
+        user.setFullName(userDTO.getFullName());
+        user.setEmail(userDTO.getEmail());
+        user.setPhone(userDTO.getPhone());
+        user.setUpdatedAt(LocalDateTime.now());
+
+        Users updatedUser = userRepository.save(user);
+
+        UserResponse userResponse = ModelMapperUtil.mapper(updatedUser, UserResponse.class);
+
+        AuthResponse authResponse = new AuthResponse();
+        authResponse.setUser(userResponse);
+        authResponse.setMessage("Profile updated successfully");
+        authResponse.setTitle("Profile Update");
+
+        return authResponse;
     }
 }
 

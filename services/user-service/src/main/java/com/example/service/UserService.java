@@ -10,4 +10,6 @@ public interface UserService {
     UserResponse getUserByEmail(String email) throws Exception;
     UserResponse getUserById(Long id) throws Exception;
     List<UserResponse> getAllUsers();
+    void updateIsActiveStatus(Long userId, boolean isActive) throws Exception;
+    void deleteUser(Long userId) throws Exception;
 }

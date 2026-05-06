@@ -40,4 +40,19 @@ public class UserController {
         List<UserResponse> users = userService.getAllUsers();
         return ResponseEntity.ok(users);
     }
+
+    @PutMapping("/{userId}/status")
+    public ResponseEntity<String> updateIsActive(
+            @PathVariable Long userId,
+            @RequestParam boolean isActive) throws Exception {
+        userService.updateIsActiveStatus(userId, isActive);
+        return ResponseEntity.ok("User active status updated successfully");
+    }
+
+    @DeleteMapping("/{userId}")
+    public ResponseEntity<String> deleteUserById(@PathVariable Long userId) throws Exception {
+        userService.deleteUser(userId);
+        return ResponseEntity.ok("User deleted successfully");
+    }
+
 }

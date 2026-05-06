@@ -1,6 +1,7 @@
 package com.example.controller;
 
 
+import com.example.payload.dto.PasswordDTO;
 import com.example.payload.dto.UserDTO;
 import com.example.payload.request.LoginRequest;
 import com.example.payload.response.AuthResponse;
@@ -41,5 +42,17 @@ public class AuthController {
     public ResponseEntity<AuthResponse> refresh(HttpServletRequest request, HttpServletResponse response) throws Exception {
         AuthResponse authResponse = authService.refresh(request, response);
         return ResponseEntity.ok(authResponse);
+    }
+
+    @PutMapping("/update-profile")
+    public ResponseEntity<AuthResponse> updateProfile(@RequestParam Long userId, @RequestBody @Valid UserDTO userDTO) throws Exception {
+        AuthResponse authResponse = authService.updateProfile(userId, userDTO);
+        return ResponseEntity.ok(authResponse);
+    }
+
+    @PutMapping("/update-password")
+    public ResponseEntity<String> updatePassword(@RequestParam Long userId, @RequestBody @Valid PasswordDTO passwordDTO) throws Exception {
+        authService.updatePassword(userId, passwordDTO);
+        return ResponseEntity.ok("Password updated successfully");
     }
 }

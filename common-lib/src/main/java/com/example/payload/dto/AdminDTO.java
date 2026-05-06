@@ -9,7 +9,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PasswordDTO {
-    private String currentPassword;
-    private String newPassword;
+public class AdminDTO {
+    private String email;
+    private String password;
+    private String fullName;
+    private String phone;
 }

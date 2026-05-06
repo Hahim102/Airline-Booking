@@ -9,6 +9,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 
 @Component
 public class JwtAuthenticationFilter implements GlobalFilter {
@@ -37,7 +39,7 @@ public class JwtAuthenticationFilter implements GlobalFilter {
             }
 
             Long userId = JwtUtils.extractUserId(token);
-            String roles = JwtUtils.extractRoles(token);
+            List<String> roles = JwtUtils.extractRoles(token);
             String email = JwtUtils.extractEmail(token);
 
 
@@ -46,11 +48,10 @@ public class JwtAuthenticationFilter implements GlobalFilter {
                     .mutate()
                     .header("X-User-Email", email)
                     .header("X-User-Id", String.valueOf(userId))
-                    .header("X-User-Roles", roles)
+                    .header("X-User-Roles", String.join(",", roles))
                     .build();
-
-
          return chain.filter(exchange.mutate().request(request).build());
+
     }
 
     public Mono<Void> unauthorized(ServerWebExchange exchange) {

@@ -36,7 +36,14 @@ public class Users {
     @Column(nullable = false)
     private UserRole role;
 
+    @Column(nullable = false)
+    private boolean active;
+
+    @Column(nullable = false)
+    private boolean deleted;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime deletedAt;
     private LocalDateTime lastLoginAt;
 }

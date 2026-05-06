@@ -21,7 +21,7 @@ public class JwtProvider {
 
     public String generateAccessToken(Authentication authentication, Long userId) {
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
-        String roles = populateAuthorities(authorities);
+        List<String> roles = populateAuthorities(authorities);
         return Jwts.builder()
                 .subject(authentication.getName())
                 .claim("roles", roles)
@@ -41,11 +41,10 @@ public class JwtProvider {
                 .compact();
     }
 
-    public String populateAuthorities(Collection<? extends GrantedAuthority> authorities) {
-        Set<String> roles = new HashSet<>();
-        for (GrantedAuthority authority : authorities) {
-            roles.add(authority.getAuthority());
-        }
-        return String.join(",", roles);
+    public List<String> populateAuthorities(Collection<? extends GrantedAuthority> authorities) {
+        return authorities.stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(r -> r.startsWith("ROLE_"))
+                .toList();
     }
 }

@@ -16,7 +16,6 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.spec.SecretKeySpec;
-import javax.sql.DataSource;
 
 import static com.example.jwt.JwtConstant.JWT_SECRET;
 

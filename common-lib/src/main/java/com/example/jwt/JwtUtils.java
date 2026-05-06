@@ -6,6 +6,7 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.util.List;
 
 
 @Component
@@ -26,8 +27,12 @@ public class JwtUtils {
         return extractAllClaims(token).getSubject();
     }
 
-    public static String extractRoles(String token) {
-        return extractAllClaims(token).get("roles", String.class);
+    public static List<String> extractRoles(String token) {
+        List<?> roles = extractAllClaims(token).get("roles", List.class);
+
+        return roles.stream()
+                .map(Object::toString)
+                .toList();
     }
 
     public static Long extractUserId(String token) {
