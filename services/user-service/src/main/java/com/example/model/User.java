@@ -9,11 +9,12 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
+@Table(name = "users")
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @Entity
-public class Users {
+public class User {
 
     @Id
     @SequenceGenerator(name = "user_seq", sequenceName = "USER_SEQ", allocationSize = 1)

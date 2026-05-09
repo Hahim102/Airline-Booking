@@ -1,6 +1,6 @@
 package com.example.repository;
 
-import com.example.model.Users;
+import com.example.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -9,9 +9,9 @@ import java.util.Optional;
 
 
 @Repository
-public interface UserRepository extends JpaRepository<Users, Long> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
-    Users findByEmailAndDeletedIsFalse(String email);
-    List<Users> findAllByDeletedIsFalse();
-    Optional<Users> findByIdAndDeletedIsFalse(Long id);
+    User findByEmailAndDeletedIsFalse(String email);
+    List<User> findAllByDeletedIsFalse();
+    Optional<User> findByIdAndDeletedIsFalse(Long id);
 }

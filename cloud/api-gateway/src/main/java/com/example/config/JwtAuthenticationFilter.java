@@ -1,8 +1,10 @@
 package com.example.config;
 
 import com.example.jwt.JwtUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
@@ -13,50 +15,62 @@ import java.util.List;
 
 
 @Component
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter implements GlobalFilter {
 
-
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
          String path = exchange.getRequest().getURI().getPath();
+
          if (path.startsWith("/api/auth")) {
              return chain.filter(exchange);
          }
+         
          String authHeader = exchange.getRequest()
                  .getHeaders()
                  .getFirst("Authorization");
 
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return unauthorized(exchange);
-            }
+         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+             return unauthorized(exchange);
+         }
 
+         String token = authHeader.substring(7);
 
-            String token = authHeader.substring(7);
+        Boolean isBlacklisted = redisTemplate.hasKey(
+                "blacklist:" + token
+        );
 
-            if (!JwtUtils.isTokenValid(token)) {
-                return unauthorized(exchange);
-            }
+        if (Boolean.TRUE.equals(isBlacklisted)) {
 
-            Long userId = JwtUtils.extractUserId(token);
-            List<String> roles = JwtUtils.extractRoles(token);
-            String email = JwtUtils.extractEmail(token);
+            exchange.getResponse()
+                    .setStatusCode(HttpStatus.UNAUTHORIZED);
 
+            return exchange.getResponse().setComplete();
+        }
 
-            ServerHttpRequest request = exchange
-                    .getRequest()
-                    .mutate()
-                    .header("X-User-Email", email)
-                    .header("X-User-Id", String.valueOf(userId))
-                    .header("X-User-Roles", String.join(",", roles))
-                    .build();
+         if (!JwtUtils.isTokenValid(token)) {
+             return unauthorized(exchange);
+         }
+
+         Long userId = JwtUtils.extractUserId(token);
+         List<String> roles = JwtUtils.extractRoles(token);
+         String email = JwtUtils.extractEmail(token);
+
+         ServerHttpRequest request = exchange
+                 .getRequest()
+                 .mutate()
+                 .header("X-User-Email", email)
+                 .header("X-User-Id", String.valueOf(userId))
+                 .header("X-User-Roles", String.join(",", roles))
+                 .build();
+         
          return chain.filter(exchange.mutate().request(request).build());
-
     }
 
-    public Mono<Void> unauthorized(ServerWebExchange exchange) {
+    private Mono<Void> unauthorized(ServerWebExchange exchange) {
          exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
          return exchange.getResponse().setComplete();
     }
-
 }

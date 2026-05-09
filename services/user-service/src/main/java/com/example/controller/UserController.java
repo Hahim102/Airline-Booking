@@ -2,6 +2,8 @@ package com.example.controller;
 
 
 import com.example.payload.dto.UserDTO;
+import com.example.payload.request.CreateUserRequest;
+import com.example.payload.response.CreateUserResponse;
 import com.example.payload.response.UserResponse;
 import com.example.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.CacheRequest;
 import java.util.List;
 
 @RestController
@@ -42,17 +45,23 @@ public class UserController {
     }
 
     @PutMapping("/{userId}/status")
-    public ResponseEntity<String> updateIsActive(
+    public ResponseEntity<UserResponse> updateIsActive(
             @PathVariable Long userId,
             @RequestParam boolean isActive) throws Exception {
-        userService.updateIsActiveStatus(userId, isActive);
-        return ResponseEntity.ok("User active status updated successfully");
+        UserResponse user = userService.updateIsActiveStatus(userId, isActive);
+        return ResponseEntity.ok(user);
     }
 
     @DeleteMapping("/{userId}")
     public ResponseEntity<String> deleteUserById(@PathVariable Long userId) throws Exception {
         userService.deleteUser(userId);
         return ResponseEntity.ok("User deleted successfully");
+    }
+
+    @PostMapping("/create-user")
+    public ResponseEntity<CreateUserResponse> createUser(@RequestBody CreateUserRequest request) throws Exception {
+        CreateUserResponse createdUser = userService.createUser(request);
+        return ResponseEntity.ok(createdUser);
     }
 
 }

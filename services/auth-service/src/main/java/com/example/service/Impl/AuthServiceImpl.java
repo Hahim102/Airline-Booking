@@ -3,23 +3,21 @@ package com.example.service.Impl;
 import com.example.config.JwtProvider;
 import com.example.enums.UserRole;
 import com.example.jwt.JwtUtils;
-import com.example.model.BlacklistedToken;
-import com.example.model.RefreshToken;
-import com.example.model.Users;
+import com.example.model.User;
 import com.example.payload.dto.PasswordDTO;
 import com.example.payload.dto.UserDTO;
 import com.example.payload.response.AuthResponse;
 import com.example.payload.response.UserResponse;
-import com.example.repository.BlacklistedTokenRepository;
-import com.example.repository.RefreshTokenRepository;
 import com.example.repository.UserRepository;
 import com.example.service.AuthService;
+import com.example.service.RedisTokenService;
 import com.example.service.UserDetailService;
+import com.example.util.CookieUtils;
 import com.example.util.ModelMapperUtil;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -27,20 +25,23 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 
 
 @Service
 @Transactional
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+    private static final int REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+    private static final long REFRESH_TOKEN_TTL_MILLISECONDS = 7 * 24 * 60 * 60 * 1000L;
+    private static final long ACCESS_TOKEN_TTL_MILLISECONDS = 15 * 60 * 1000L; // 15 minutes
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserDetailService userDetailService;
-    private final BlacklistedTokenRepository blacklistedTokenRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final RedisTokenService redisTokenService;
+    private final CookieUtils cookieUtils;
     private final JwtProvider jwtProvider;
     private final AuthenticationManager authenticationManager;
 
@@ -49,17 +50,16 @@ public class AuthServiceImpl implements AuthService {
     2. Encode password using BCryptPasswordEncoder
     3. Save user to the database
     4. Generate JWT token
-    5. Return AuthResponse with token and user details
+    5. Save refresh token to Redis
+    6. Return AuthResponse with token and user details
     */
-
-
     @Override
     public AuthResponse register(UserDTO request, HttpServletResponse response) throws Exception {
-        Users existingUsers = userRepository.findByEmailAndDeletedIsFalse(request.getEmail());
-        if (existingUsers != null) {
+        User existingUser = userRepository.findByEmailAndDeletedIsFalse(request.getEmail());
+        if (existingUser != null) {
             throw new Exception("Email already exists");
         }
-        Users newUsers = Users.builder()
+        User newUser = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .phone(request.getPhone())
@@ -68,14 +68,13 @@ public class AuthServiceImpl implements AuthService {
                 .deleted(false)
                 .fullName(request.getFullName())
                 .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
                 .lastLoginAt(LocalDateTime.now())
                 .build();
-        Users savedUsers = userRepository.save(newUsers);
+        User savedUser = userRepository.save(newUser);
 
-        UserResponse userResponse = ModelMapperUtil.mapper(savedUsers, UserResponse.class);
+        UserResponse userResponse = ModelMapperUtil.mapper(savedUser, UserResponse.class);
 
-        UserDetails userDetails = userDetailService.loadUserByUsername(savedUsers.getEmail());
+        UserDetails userDetails = userDetailService.loadUserByUsername(savedUser.getEmail());
 
         Authentication authentication =
                 new UsernamePasswordAuthenticationToken(
@@ -84,26 +83,17 @@ public class AuthServiceImpl implements AuthService {
                         userDetails.getAuthorities()
                 );
 
-        String accessToken = jwtProvider.generateAccessToken(authentication, savedUsers.getId());
-        String refreshToken = jwtProvider.generateRefreshToken(savedUsers.getId());
+        String accessToken = jwtProvider.generateAccessToken(authentication, savedUser.getId());
+        String refreshToken = jwtProvider.generateRefreshToken(savedUser.getId());
 
-        refreshTokenRepository.save(
-                new RefreshToken(null, refreshToken, savedUsers.getId(),
-                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
-        );
+        redisTokenService.saveRefreshToken(savedUser.getId(), refreshToken, REFRESH_TOKEN_TTL_MILLISECONDS);
 
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
+        cookieUtils.addRefreshTokenCookie(response, refreshToken, REFRESH_TOKEN_TTL_SECONDS);
 
         AuthResponse authResponse = new AuthResponse();
         authResponse.setToken(accessToken);
         authResponse.setUser(userResponse);
-        authResponse.setTitle("Hello " + savedUsers.getFullName());
+        authResponse.setTitle("Hello " + savedUser.getFullName());
         authResponse.setMessage("Registration successful");
 
         return authResponse;
@@ -114,44 +104,33 @@ public class AuthServiceImpl implements AuthService {
     2. Compare password using BCryptPasswordEncoder
     3. Update last login time
     4. Generate JWT token
-    5. Return AuthResponse with token and user details
+    5. Save refresh token to Redis
+    6. Return AuthResponse with token and user details
     */
-
-
     @Override
     public AuthResponse login(String email, String password, HttpServletResponse response) throws Exception {
         Authentication authentication = authenticationManager.
                 authenticate(new UsernamePasswordAuthenticationToken(email, password));
-        Users users = userRepository.findByEmailAndDeletedIsFalse(email);
-        if (users == null) {
+        User user = userRepository.findByEmailAndDeletedIsFalse(email);
+        if (user == null) {
             throw new RuntimeException("User not found");
         }
-        users.setLastLoginAt(LocalDateTime.now());
-        userRepository.save(users);
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
 
-        UserResponse userResponse = ModelMapperUtil.mapper(users, UserResponse.class);
+        UserResponse userResponse = ModelMapperUtil.mapper(user, UserResponse.class);
 
-        String accessToken = jwtProvider.generateAccessToken(authentication, users.getId());
-        String refreshToken = jwtProvider.generateRefreshToken(users.getId());
+        String accessToken = jwtProvider.generateAccessToken(authentication, user.getId());
+        String refreshToken = jwtProvider.generateRefreshToken(user.getId());
 
-        refreshTokenRepository.save(
-                new RefreshToken(null, refreshToken, users.getId(),
-                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
-        );
+        redisTokenService.saveRefreshToken(user.getId(), refreshToken, REFRESH_TOKEN_TTL_MILLISECONDS);
 
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
-
+        cookieUtils.addRefreshTokenCookie(response, refreshToken, REFRESH_TOKEN_TTL_SECONDS);
 
         AuthResponse authResponse = new AuthResponse();
         authResponse.setToken(accessToken);
         authResponse.setUser(userResponse);
-        authResponse.setTitle("Hello " + users.getFullName());
+        authResponse.setTitle("Hello " + user.getFullName());
         authResponse.setMessage("Login successful");
         return authResponse;
     }
@@ -160,80 +139,48 @@ public class AuthServiceImpl implements AuthService {
     public void logout(HttpServletRequest request, HttpServletResponse response, String accessToken) {
         try {
             if (accessToken != null && JwtUtils.isTokenValid(accessToken)) {
-                BlacklistedToken blacklistedToken = BlacklistedToken.builder()
-                        .token(accessToken)
-                        .expiredAt(JwtUtils.extractAllClaims(accessToken).getExpiration())
-                        .build();
-
-                blacklistedTokenRepository.save(blacklistedToken);
+                redisTokenService.blacklistAccessToken(accessToken, ACCESS_TOKEN_TTL_MILLISECONDS);
             }
         } catch (Exception e) {
-            // ignore token invalid/expired
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid access token");
         }
-        String refreshToken = getCookie(request);
-
+        
+        String refreshToken = cookieUtils.extractRefreshTokenFromCookies(request);
         if (refreshToken != null) {
-            refreshTokenRepository.deleteByToken(refreshToken);
+            redisTokenService.revokeRefreshToken(refreshToken);
         }
 
-        Cookie cookie = new Cookie("refreshToken", null);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-
-        response.addCookie(cookie);
-        }
-    private String getCookie(HttpServletRequest request) {
-        if (request.getCookies() != null) {
-            for (Cookie cookie : request.getCookies()) {
-                if (cookie.getName().equals("refreshToken")) {
-                    return cookie.getValue();
-                }
-            }
-        }
-        return null;
+        cookieUtils.clearRefreshTokenCookie(response);
     }
 
+    @Override
     public AuthResponse refresh(HttpServletRequest request, HttpServletResponse response) {
-        String refreshToken = getCookie(request);
+        String refreshToken = cookieUtils.extractRefreshTokenFromCookies(request);
         if (refreshToken == null) {
-            throw new RuntimeException("Refresh token is null");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token is missing");
         }
 
-        RefreshToken token = refreshTokenRepository.findByToken(refreshToken)
-                .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
-
-        if (token.getExpiryDate().before(new Date())) {
-            refreshTokenRepository.deleteById(token.getId());
-            throw new RuntimeException("Refresh token expired");
+        if (!redisTokenService.isRefreshTokenValid(refreshToken)) {
+            cookieUtils.clearRefreshTokenCookie(response);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
         }
 
-        Users user = userRepository.findById(token.getUserId())
+        Long userId = redisTokenService.getUserIdFromRefreshToken(refreshToken);
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
+        }
+
+        User user = userRepository.findById(userId)
                 .filter(u -> u.isActive() && !u.isDeleted())
                 .orElseThrow(() -> new RuntimeException("User is inactive or deleted"));
 
-        refreshTokenRepository.deleteById(token.getId());
-
+        redisTokenService.revokeRefreshToken(refreshToken);
 
         String newRefreshToken = jwtProvider.generateRefreshToken(user.getId());
+        
+        redisTokenService.saveRefreshToken(user.getId(), newRefreshToken, REFRESH_TOKEN_TTL_MILLISECONDS);
 
-        refreshTokenRepository.save(
-                new RefreshToken(
-                        null,
-                        newRefreshToken,
-                        user.getId(),
-                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000)
-                )
-        );
-
-
-        Cookie cookie = new Cookie("refreshToken", newRefreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // dev
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
+        cookieUtils.addRefreshTokenCookie(response, newRefreshToken, REFRESH_TOKEN_TTL_SECONDS);
 
         UserDetails userDetails = userDetailService.loadUserByUsername(user.getEmail());
 
@@ -254,7 +201,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void updatePassword(Long userId, PasswordDTO passwordDTO) throws Exception {
-        Users user = userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new Exception("User not found with id: " + userId));
         if (!passwordEncoder.matches(passwordDTO.getCurrentPassword(), user.getPassword())) {
             throw new Exception("Wrong password");
@@ -267,10 +214,10 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse updateProfile(Long userId, UserDTO userDTO) throws Exception {
-        Users user = userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow();
 
-        Users existing = userRepository.findByEmailAndDeletedIsFalse(userDTO.getEmail());
+        User existing = userRepository.findByEmailAndDeletedIsFalse(userDTO.getEmail());
         if (existing != null && !existing.getId().equals(userId)) {
             throw new RuntimeException("Email already in use");
         }
@@ -280,7 +227,7 @@ public class AuthServiceImpl implements AuthService {
         user.setPhone(userDTO.getPhone());
         user.setUpdatedAt(LocalDateTime.now());
 
-        Users updatedUser = userRepository.save(user);
+        User updatedUser = userRepository.save(user);
 
         UserResponse userResponse = ModelMapperUtil.mapper(updatedUser, UserResponse.class);
 
