@@ -3,8 +3,6 @@ package com.example.service.Impl;
 import com.example.config.JwtProvider;
 import com.example.enums.UserRole;
 import com.example.jwt.JwtUtils;
-import com.example.model.BlacklistedToken;
-import com.example.model.RefreshToken;
 import com.example.model.Users;
 import com.example.payload.dto.PasswordDTO;
 import com.example.payload.dto.UserDTO;
@@ -14,12 +12,12 @@ import com.example.repository.BlacklistedTokenRepository;
 import com.example.repository.RefreshTokenRepository;
 import com.example.repository.UserRepository;
 import com.example.service.AuthService;
+import com.example.service.RedisTokenService;
 import com.example.service.UserDetailService;
+import com.example.util.CookieUtils;
 import com.example.util.ModelMapperUtil;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -27,6 +25,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Date;
@@ -43,6 +42,9 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtProvider jwtProvider;
     private final AuthenticationManager authenticationManager;
+    private final CookieUtils cookieUtils;
+    private final RedisTokenService redisTokenService;
+
 
     /*
     1. Check if email exists in the database
@@ -54,7 +56,7 @@ public class AuthServiceImpl implements AuthService {
 
 
     @Override
-    public AuthResponse register(UserDTO request, HttpServletResponse response) throws Exception {
+    public AuthResponse register(UserDTO request) throws Exception {
         Users existingUsers = userRepository.findByEmailAndDeletedIsFalse(request.getEmail());
         if (existingUsers != null) {
             throw new Exception("Email already exists");
@@ -87,21 +89,21 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtProvider.generateAccessToken(authentication, savedUsers.getId());
         String refreshToken = jwtProvider.generateRefreshToken(savedUsers.getId());
 
-        refreshTokenRepository.save(
-                new RefreshToken(null, refreshToken, savedUsers.getId(),
-                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
+//        refreshTokenRepository.save(
+//                new RefreshToken(null, refreshToken, savedUsers.getId(),
+//                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
+//        );
+
+        redisTokenService.saveRefreshToken(
+                savedUsers.getId(),
+                refreshToken,
+                jwtProvider.getRefreshExpiration()
         );
 
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
 
         AuthResponse authResponse = new AuthResponse();
-        authResponse.setToken(accessToken);
+        authResponse.setAccessToken(accessToken);
+        authResponse.setRefreshToken(refreshToken);
         authResponse.setUser(userResponse);
         authResponse.setTitle("Hello " + savedUsers.getFullName());
         authResponse.setMessage("Registration successful");
@@ -119,7 +121,7 @@ public class AuthServiceImpl implements AuthService {
 
 
     @Override
-    public AuthResponse login(String email, String password, HttpServletResponse response) throws Exception {
+    public AuthResponse login(String email, String password) throws Exception {
         Authentication authentication = authenticationManager.
                 authenticate(new UsernamePasswordAuthenticationToken(email, password));
         Users users = userRepository.findByEmailAndDeletedIsFalse(email);
@@ -134,30 +136,33 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtProvider.generateAccessToken(authentication, users.getId());
         String refreshToken = jwtProvider.generateRefreshToken(users.getId());
 
-        refreshTokenRepository.save(
-                new RefreshToken(null, refreshToken, users.getId(),
-                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
+//        refreshTokenRepository.save(
+//                new RefreshToken(null, refreshToken, users.getId(),
+//                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
+//        );
+
+        redisTokenService.saveRefreshToken(
+                users.getId(),
+                refreshToken,
+                jwtProvider.getRefreshExpiration()
         );
-
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
+        System.out.println(
+                redisTokenService.getRefreshToken(users.getId())
+        );
 
 
         AuthResponse authResponse = new AuthResponse();
-        authResponse.setToken(accessToken);
+        authResponse.setAccessToken(accessToken);
+        authResponse.setRefreshToken(refreshToken);
         authResponse.setUser(userResponse);
         authResponse.setTitle("Hello " + users.getFullName());
         authResponse.setMessage("Login successful");
         return authResponse;
     }
 
+    /*
     @Override
-    public void logout(HttpServletRequest request, HttpServletResponse response, String accessToken) {
+    public void logout(String accessToken, String refreshToken) {
         try {
             if (accessToken != null && JwtUtils.isTokenValid(accessToken)) {
                 BlacklistedToken blacklistedToken = BlacklistedToken.builder()
@@ -168,34 +173,59 @@ public class AuthServiceImpl implements AuthService {
                 blacklistedTokenRepository.save(blacklistedToken);
             }
         } catch (Exception e) {
-            // ignore token invalid/expired
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid access token");
         }
-        String refreshToken = getCookie(request);
 
         if (refreshToken != null) {
             refreshTokenRepository.deleteByToken(refreshToken);
         }
 
-        Cookie cookie = new Cookie("refreshToken", null);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
+    }
+     */
+    @Override
+    public void logout(String accessToken, String refreshToken) {
 
-        response.addCookie(cookie);
-        }
-    private String getCookie(HttpServletRequest request) {
-        if (request.getCookies() != null) {
-            for (Cookie cookie : request.getCookies()) {
-                if (cookie.getName().equals("refreshToken")) {
-                    return cookie.getValue();
+        try {
+
+            if (accessToken != null &&
+                    JwtUtils.isTokenValid(accessToken)) {
+
+                Date expiration =
+                        JwtUtils.extractAllClaims(accessToken)
+                                .getExpiration();
+
+                long remainingTime =
+                        expiration.getTime() - System.currentTimeMillis();
+
+                if (remainingTime > 0) {
+
+                    redisTokenService.blacklistAccessToken(
+                            accessToken,
+                            remainingTime
+                    );
                 }
             }
+
+        } catch (Exception e) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Invalid access token"
+            );
         }
-        return null;
+
+        if (refreshToken != null &&
+                JwtUtils.isTokenValid(refreshToken)) {
+
+            Long userId =
+                    JwtUtils.extractUserId(refreshToken);
+
+            redisTokenService.deleteRefreshToken(userId);
+        }
     }
 
-    public AuthResponse refresh(HttpServletRequest request, HttpServletResponse response) {
-        String refreshToken = getCookie(request);
+    /*
+    public AuthResponse refresh(String refreshToken) {
         if (refreshToken == null) {
             throw new RuntimeException("Refresh token is null");
         }
@@ -227,14 +257,6 @@ public class AuthServiceImpl implements AuthService {
         );
 
 
-        Cookie cookie = new Cookie("refreshToken", newRefreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // dev
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
-
         UserDetails userDetails = userDetailService.loadUserByUsername(user.getEmail());
 
         Authentication authentication =
@@ -246,8 +268,93 @@ public class AuthServiceImpl implements AuthService {
         String newAccessToken = jwtProvider.generateAccessToken(authentication, user.getId());
 
         AuthResponse res = new AuthResponse();
-        res.setToken(newAccessToken);
+        res.setAccessToken(newAccessToken);
+        res.setRefreshToken(newRefreshToken);
         res.setUser(ModelMapperUtil.mapper(user, UserResponse.class));
+
+        return res;
+    }
+
+     */
+    @Override
+    public AuthResponse refresh(String refreshToken) {
+
+        if (refreshToken == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Refresh token missing"
+            );
+        }
+
+        if (!JwtUtils.isTokenValid(refreshToken)) {
+            throw new RuntimeException(
+                    "Invalid refresh token"
+            );
+        }
+
+        Long userId =
+                JwtUtils.extractUserId(refreshToken);
+
+
+        String redisToken =
+                redisTokenService.getRefreshToken(userId);
+
+
+        if (redisToken == null ||
+                !redisToken.equals(refreshToken)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Refresh token invalid"
+            );
+        }
+
+        Users user = userRepository.findById(userId)
+                .filter(u -> u.isActive() && !u.isDeleted())
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "User inactive or deleted"
+                        ));
+
+        redisTokenService.deleteRefreshToken(userId);
+
+        String newRefreshToken =
+                jwtProvider.generateRefreshToken(user.getId());
+
+        redisTokenService.saveRefreshToken(
+                user.getId(),
+                newRefreshToken,
+                jwtProvider.getRefreshExpiration()
+        );
+
+        UserDetails userDetails =
+                userDetailService.loadUserByUsername(
+                        user.getEmail()
+                );
+
+        Authentication authentication =
+                new UsernamePasswordAuthenticationToken(
+                        userDetails,
+                        null,
+                        userDetails.getAuthorities()
+                );
+
+        String newAccessToken =
+                jwtProvider.generateAccessToken(
+                        authentication,
+                        user.getId()
+                );
+
+        AuthResponse res = new AuthResponse();
+
+        res.setAccessToken(newAccessToken);
+        res.setRefreshToken(newRefreshToken);
+        res.setUser(
+                ModelMapperUtil.mapper(
+                        user,
+                        UserResponse.class
+                )
+        );
 
         return res;
     }

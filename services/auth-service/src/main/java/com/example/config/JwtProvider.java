@@ -23,11 +23,12 @@ public class JwtProvider {
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
         List<String> roles = populateAuthorities(authorities);
         return Jwts.builder()
-                .subject(authentication.getName())
+                .subject(userId.toString())
+                .claim("email", authentication.getName())
                 .claim("roles", roles)
                 .claim("userId", userId)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + 15 * 60 * 1000))
+                .expiration(new Date(System.currentTimeMillis() + getAccessExpiration()))
                 .signWith(secretKey)
                 .compact();
     }
@@ -36,7 +37,7 @@ public class JwtProvider {
         return Jwts.builder()
                 .subject(userId.toString())
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
+                .expiration(new Date(System.currentTimeMillis() + getRefreshExpiration()    ))
                 .signWith(secretKey)
                 .compact();
     }
@@ -46,5 +47,11 @@ public class JwtProvider {
                 .map(GrantedAuthority::getAuthority)
                 .filter(r -> r.startsWith("ROLE_"))
                 .toList();
+    }
+    public long getRefreshExpiration() {
+        return 7 * 24 * 60 * 60 * 1000;
+    }
+    public long getAccessExpiration() {
+        return 15 * 60 * 1000;
     }
 }

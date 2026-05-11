@@ -24,7 +24,8 @@ public class JwtUtils {
     }
 
     public static String extractEmail(String token) {
-        return extractAllClaims(token).getSubject();
+        return extractAllClaims(token)
+                .get("email", String.class);
     }
 
     public static List<String> extractRoles(String token) {
@@ -36,7 +37,10 @@ public class JwtUtils {
     }
 
     public static Long extractUserId(String token) {
-        return extractAllClaims(token).get("userId", Long.class);
+
+        Claims claims = extractAllClaims(token);
+
+        return Long.parseLong(claims.getSubject());
     }
 
     public static boolean isTokenValid(String token) {

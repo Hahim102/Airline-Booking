@@ -1,8 +1,10 @@
 package com.example.config;
 
 import com.example.jwt.JwtUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.stereotype.Component;
@@ -13,7 +15,10 @@ import java.util.List;
 
 
 @Component
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter implements GlobalFilter {
+
+    private final ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
 
 
 
@@ -31,26 +36,58 @@ public class JwtAuthenticationFilter implements GlobalFilter {
                 return unauthorized(exchange);
             }
 
-
             String token = authHeader.substring(7);
 
-            if (!JwtUtils.isTokenValid(token)) {
-                return unauthorized(exchange);
-            }
+            String blacklistKey =
+                    "auth:blacklist:" + token;
 
-            Long userId = JwtUtils.extractUserId(token);
-            List<String> roles = JwtUtils.extractRoles(token);
-            String email = JwtUtils.extractEmail(token);
+        return reactiveRedisTemplate
+                .hasKey(blacklistKey)
+                .flatMap(exists -> {
 
+                    if (Boolean.TRUE.equals(exists)) {
 
-            ServerHttpRequest request = exchange
-                    .getRequest()
-                    .mutate()
-                    .header("X-User-Email", email)
-                    .header("X-User-Id", String.valueOf(userId))
-                    .header("X-User-Roles", String.join(",", roles))
-                    .build();
-         return chain.filter(exchange.mutate().request(request).build());
+                        return unauthorized(exchange);
+                    }
+
+                    if (!JwtUtils.isTokenValid(token)) {
+
+                        return unauthorized(exchange);
+                    }
+
+                    Long userId =
+                            JwtUtils.extractUserId(token);
+
+                    List<String> roles =
+                            JwtUtils.extractRoles(token);
+
+                    String email =
+                            JwtUtils.extractEmail(token);
+
+                    ServerHttpRequest request = exchange
+                            .getRequest()
+                            .mutate()
+                            .header(
+                                    "X-User-Email",
+                                    email
+                            )
+                            .header(
+                                    "X-User-Id",
+                                    String.valueOf(userId)
+                            )
+                            .header(
+                                    "X-User-Roles",
+                                    String.join(",", roles)
+                            )
+                            .build();
+
+                    return chain.filter(
+                            exchange
+                                    .mutate()
+                                    .request(request)
+                                    .build()
+                    );
+                });
 
     }
 

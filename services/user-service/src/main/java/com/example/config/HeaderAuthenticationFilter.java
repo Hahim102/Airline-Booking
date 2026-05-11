@@ -29,6 +29,7 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
         String email = request.getHeader("X-User-Email");
         String rolesHeader = request.getHeader("X-User-Roles");
 
+
         if (email != null && rolesHeader != null) {
 
             Collection<GrantedAuthority> authorities = Arrays.stream(rolesHeader.split(","))

@@ -8,10 +8,10 @@ import jakarta.servlet.http.HttpServletResponse;
 
 public interface AuthService {
 
-    AuthResponse login(String username, String password,HttpServletResponse response) throws Exception;
-    AuthResponse register(UserDTO request, HttpServletResponse response) throws Exception;
-    void logout(HttpServletRequest request, HttpServletResponse response, String token);
+    AuthResponse login(String email, String password) throws Exception;
+    AuthResponse register(UserDTO request) throws Exception;
+    void logout(String accessToken, String refreshToken);
     AuthResponse updateProfile(Long userId, UserDTO userDTO) throws Exception;
-    AuthResponse refresh(HttpServletRequest request, HttpServletResponse response) throws Exception;
+    AuthResponse refresh(String refreshToken) throws Exception;
     void updatePassword(Long userId, PasswordDTO passwordDTO) throws Exception;
 }

@@ -1,7 +1,9 @@
 package com.example.controller;
 
 
+import com.example.payload.dto.CreateUserByAdminDTO;
 import com.example.payload.dto.UserDTO;
+import com.example.payload.response.CreateUserResponse;
 import com.example.payload.response.UserResponse;
 import com.example.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,11 @@ public class UserController {
     public ResponseEntity<String> deleteUserById(@PathVariable Long userId) throws Exception {
         userService.deleteUser(userId);
         return ResponseEntity.ok("User deleted successfully");
+    }
+    @PostMapping("/create-user")
+    public ResponseEntity<CreateUserResponse> createUser(@RequestBody CreateUserByAdminDTO request) throws Exception {
+        CreateUserResponse createdUser = userService.createUser(request);
+        return ResponseEntity.ok(createdUser);
     }
 
 }
