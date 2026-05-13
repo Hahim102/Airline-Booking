@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+</head>
+
+<body style="font-family: Arial, sans-serif; line-height: 1.6;">
+
+<h2>Xin chào <span th:text="${name}"></span> 👋</h2>
+
+<p>
+    Chào mừng bạn đến với <strong>Airline Booking</strong>.
+</p>
+
+<p>
+    Vui lòng sử dụng mã OTP bên dưới để xác thực tài khoản của bạn:
+</p>
+
+<h1 style="letter-spacing: 4px;">
+    <span th:text="${otp}"></span>
+</h1>
+
+<p>
+    Mã OTP này có hiệu lực trong <strong>5 phút</strong>.
+</p>
+
+<p>
+    Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.
+</p>
+
+<br/>
+
+<p>Trân trọng,</p>
+<p><strong>Airline Booking Team ✈️</strong></p>
+
+</body>
+</html>

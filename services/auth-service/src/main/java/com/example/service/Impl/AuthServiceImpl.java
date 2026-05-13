@@ -2,19 +2,17 @@ package com.example.service.Impl;
 
 import com.example.config.JwtProvider;
 import com.example.enums.UserRole;
+import com.example.event.EmailEvent;
 import com.example.jwt.JwtUtils;
 import com.example.model.Users;
-import com.example.payload.dto.PasswordDTO;
-import com.example.payload.dto.UserDTO;
+import com.example.payload.dto.*;
 import com.example.payload.response.AuthResponse;
 import com.example.payload.response.UserResponse;
-import com.example.repository.BlacklistedTokenRepository;
-import com.example.repository.RefreshTokenRepository;
 import com.example.repository.UserRepository;
 import com.example.service.AuthService;
+import com.example.service.RedisOtpService;
 import com.example.service.RedisTokenService;
 import com.example.service.UserDetailService;
-import com.example.util.CookieUtils;
 import com.example.util.ModelMapperUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -29,6 +27,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Date;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 
 @Service
@@ -38,12 +38,11 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserDetailService userDetailService;
-    private final BlacklistedTokenRepository blacklistedTokenRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
     private final JwtProvider jwtProvider;
     private final AuthenticationManager authenticationManager;
-    private final CookieUtils cookieUtils;
     private final RedisTokenService redisTokenService;
+    private final KafkaProducerService kafkaProducerService;
+    private final RedisOtpService redisOtpService;
 
 
     /*
@@ -66,7 +65,7 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .phone(request.getPhone())
                 .role(UserRole.ROLE_USER)
-                .active(true)
+                .active(false)
                 .deleted(false)
                 .fullName(request.getFullName())
                 .createdAt(LocalDateTime.now())
@@ -75,36 +74,27 @@ public class AuthServiceImpl implements AuthService {
                 .build();
         Users savedUsers = userRepository.save(newUsers);
 
-        UserResponse userResponse = ModelMapperUtil.mapper(savedUsers, UserResponse.class);
+        String otp = generateOtp();
 
-        UserDetails userDetails = userDetailService.loadUserByUsername(savedUsers.getEmail());
+        redisOtpService.saveVerifyOtp(savedUsers.getEmail(), otp);
 
-        Authentication authentication =
-                new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-
-        String accessToken = jwtProvider.generateAccessToken(authentication, savedUsers.getId());
-        String refreshToken = jwtProvider.generateRefreshToken(savedUsers.getId());
-
-//        refreshTokenRepository.save(
-//                new RefreshToken(null, refreshToken, savedUsers.getId(),
-//                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
-//        );
-
-        redisTokenService.saveRefreshToken(
-                savedUsers.getId(),
-                refreshToken,
-                jwtProvider.getRefreshExpiration()
+        EmailEvent event = new EmailEvent(
+                savedUsers.getEmail(),
+                "Verify your Airline Booking account",
+                "VERIFY_OTP",
+                Map.of(
+                        "name", savedUsers.getFullName(),
+                        "otp", otp
+                )
         );
 
+        try {
+            kafkaProducerService.sendEmailEvent(event);
+        } catch (Exception e) {
+            System.out.println("Kafka unavailable: " + e.getMessage());
+        }
 
         AuthResponse authResponse = new AuthResponse();
-        authResponse.setAccessToken(accessToken);
-        authResponse.setRefreshToken(refreshToken);
-        authResponse.setUser(userResponse);
         authResponse.setTitle("Hello " + savedUsers.getFullName());
         authResponse.setMessage("Registration successful");
 
@@ -146,9 +136,21 @@ public class AuthServiceImpl implements AuthService {
                 refreshToken,
                 jwtProvider.getRefreshExpiration()
         );
-        System.out.println(
-                redisTokenService.getRefreshToken(users.getId())
+        EmailEvent event = new EmailEvent(
+                users.getEmail(),
+                "Login Notification",
+                "LOGIN_SUCCESS",
+                Map.of(
+                        "name", users.getFullName(),
+                        "time", LocalDateTime.now().toString()
+                )
         );
+
+        try {
+            kafkaProducerService.sendEmailEvent(event);
+        } catch (Exception e) {
+            System.out.println("Kafka unavailable: " + e.getMessage());
+        }
 
 
         AuthResponse authResponse = new AuthResponse();
@@ -397,6 +399,148 @@ public class AuthServiceImpl implements AuthService {
         authResponse.setTitle("Profile Update");
 
         return authResponse;
+    }
+    @Transactional
+    public AuthResponse verifyOtp(VerifyOtpDTO request) {
+
+        System.out.println("EMAIL REQUEST = " + request.getEmail());
+        System.out.println("OTP REQUEST = " + request.getOtp());
+        String redisOtp = redisOtpService.getVerifyOtp(request.getEmail());
+        System.out.println("OTP REDIS = " + redisOtp);
+
+        if (redisOtp == null) {
+            throw new RuntimeException("OTP expired or not found");
+        }
+
+        if (!redisOtp.equals(request.getOtp())) {
+            throw new RuntimeException("Invalid OTP");
+        }
+
+        Users user = userRepository.findByEmail(request.getEmail());
+        if (user == null) {
+            throw new RuntimeException("User not found with email: " + request.getEmail());
+        }
+
+        user.setActive(true);
+
+        userRepository.save(user);
+
+        redisOtpService.deleteVerifyOtp(request.getEmail());
+
+        AuthResponse authResponse = new AuthResponse();
+        authResponse.setMessage("OTP verified successfully");
+        return authResponse;
+    }
+
+    @Override
+    public AuthResponse forgotPassword(ForgotPasswordDTO request) {
+        Users user = userRepository.findByEmailAndDeletedIsFalse(
+                request.getEmail()
+        );
+
+        if (user == null) {
+            throw new RuntimeException("Email not found");
+        }
+
+        String otp = generateOtp();
+
+        redisOtpService.saveResetPasswordOtp(
+                user.getEmail(),
+                otp
+        );
+
+        EmailEvent event = new EmailEvent(
+                user.getEmail(),
+                "Reset your Airline Booking password",
+                "RESET_PASSWORD_OTP",
+                Map.of(
+                        "name", user.getFullName(),
+                        "otp", otp
+                )
+        );
+
+        try {
+            kafkaProducerService.sendEmailEvent(event);
+        } catch (Exception e) {
+            System.out.println("Kafka unavailable: " + e.getMessage());
+        }
+
+        AuthResponse response = new AuthResponse();
+        response.setMessage("OTP has been sent to your email");
+        return response;
+    }
+
+    @Override
+    public AuthResponse confirmResetPassword(VerifyOtpDTO request) {
+        String redisOtp = redisOtpService.getResetPasswordOtp(request.getEmail());
+
+        if (redisOtp == null) {
+            throw new RuntimeException("OTP expired or not found");
+        }
+
+        if (!redisOtp.equals(request.getOtp())) {
+            throw new RuntimeException("Invalid OTP");
+        }
+
+        Users user = userRepository.findByEmailAndDeletedIsFalse(request.getEmail());
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        // Mark OTP as verified - don't delete it yet
+        redisOtpService.markResetPasswordOtpAsVerified(request.getEmail());
+
+        AuthResponse response = new AuthResponse();
+        response.setMessage("OTP verified successfully. You can now reset your password.");
+        return response;
+    }
+
+    @Override
+    public AuthResponse resetPassword(ResetPasswordDTO request) {
+        String redisOtp = redisOtpService.getResetPasswordOtp(
+                request.getEmail()
+        );
+
+        if (redisOtp == null) {
+            throw new RuntimeException("OTP expired or not found");
+        }
+
+        if (!redisOtp.equals(request.getOtp())) {
+            throw new RuntimeException("Invalid OTP");
+        }
+
+
+        if (!redisOtpService.isResetPasswordOtpVerified(request.getEmail())) {
+            throw new RuntimeException("OTP not verified. Please verify OTP first.");
+        }
+
+        Users user = userRepository.findByEmailAndDeletedIsFalse(
+                request.getEmail()
+        );
+
+        if (user == null) {
+            throw new RuntimeException("User not found");
+        }
+
+        user.setPassword(
+                passwordEncoder.encode(request.getNewPassword())
+        );
+
+        user.setUpdatedAt(LocalDateTime.now());
+
+        userRepository.save(user);
+
+        redisOtpService.deleteResetPasswordOtp(request.getEmail());
+
+        AuthResponse response = new AuthResponse();
+        response.setMessage("Password reset successfully");
+        return response;
+    }
+
+    private String generateOtp() {
+        return String.valueOf(
+                ThreadLocalRandom.current().nextInt(100000, 1000000)
+        );
     }
 }
 

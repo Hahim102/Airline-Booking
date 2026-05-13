@@ -1,9 +1,7 @@
 package com.example.controller;
 
 
-import com.example.payload.dto.PasswordDTO;
-import com.example.payload.dto.UserDTO;
-import com.example.payload.dto.LoginRequestDTO;
+import com.example.payload.dto.*;
 import com.example.payload.response.AuthResponse;
 import com.example.payload.response.RecaptchaResponse;
 import com.example.service.AuthService;
@@ -29,12 +27,6 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody @Valid UserDTO userDTO, HttpServletResponse response) throws Exception {
         AuthResponse result = authService.register(userDTO);
-
-        cookieUtils.addRefreshTokenCookie(
-                response,
-                result.getRefreshToken(),
-                REFRESH_TOKEN_TTL_SECONDS
-        );
 
         RecaptchaResponse captchaResponse = recaptchaService.verify(userDTO.getCaptchaToken());
         if (captchaResponse == null || !captchaResponse.isSuccess()) {
@@ -144,6 +136,40 @@ public class AuthController {
     public ResponseEntity<String> updatePassword(@RequestParam Long userId, @RequestBody @Valid PasswordDTO passwordDTO) throws Exception {
         authService.updatePassword(userId, passwordDTO);
         return ResponseEntity.ok("Password updated successfully");
+    }
+    @PostMapping("/verify-otp")
+    public ResponseEntity<AuthResponse> verifyOtp(
+            @RequestBody VerifyOtpDTO request
+    ) {
+        return ResponseEntity.ok(
+                authService.verifyOtp(request)
+        );
+    }
+    @PostMapping("/forgot-password")
+    public ResponseEntity<AuthResponse> forgotPassword(
+            @RequestBody ForgotPasswordDTO request
+    ) {
+        return ResponseEntity.ok(
+                authService.forgotPassword(request)
+        );
+    }
+
+    @PostMapping("/confirm-reset-password")
+    public ResponseEntity<AuthResponse> confirmResetPassword(
+            @RequestBody VerifyOtpDTO request
+    ) {
+        return ResponseEntity.ok(
+                authService.confirmResetPassword(request)
+        );
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<AuthResponse> resetPassword(
+            @RequestBody ResetPasswordDTO request
+    ) {
+        return ResponseEntity.ok(
+                authService.resetPassword(request)
+        );
     }
 
 }

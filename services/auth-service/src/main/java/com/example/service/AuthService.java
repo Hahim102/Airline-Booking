@@ -1,10 +1,7 @@
 package com.example.service;
 
-import com.example.payload.dto.PasswordDTO;
-import com.example.payload.dto.UserDTO;
+import com.example.payload.dto.*;
 import com.example.payload.response.AuthResponse;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 public interface AuthService {
 
@@ -14,4 +11,11 @@ public interface AuthService {
     AuthResponse updateProfile(Long userId, UserDTO userDTO) throws Exception;
     AuthResponse refresh(String refreshToken) throws Exception;
     void updatePassword(Long userId, PasswordDTO passwordDTO) throws Exception;
+    AuthResponse verifyOtp(VerifyOtpDTO request);
+
+    AuthResponse forgotPassword(ForgotPasswordDTO request);
+    
+    AuthResponse confirmResetPassword(VerifyOtpDTO request);
+
+    AuthResponse resetPassword(ResetPasswordDTO request);
 }

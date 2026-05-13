@@ -5,6 +5,14 @@ spring:
   application:
     name: auth-service
 
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
   data:
     redis:
       host: localhost
@@ -15,6 +23,7 @@ spring:
     username: airline_user_db
     password: 123456
     driver-class-name: oracle.jdbc.OracleDriver
+
 
 recaptcha:
   secret: 6Ld7DuEsAAAAAFo2-LAEpbtEdCf3k9CxZTpqxih1

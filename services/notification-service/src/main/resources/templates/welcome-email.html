@@ -2,16 +2,54 @@
 <html xmlns:th="http://www.thymeleaf.org">
 
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <meta charset="UTF-8">
 </head>
 
-<body>
-<p>Hello <span th:text="${name}"></span>
-<p th:text="${content}"></p>
-<p>Welcome,</p>
-<p>
-    <em>NV Bao</em> <br/>
-</p>
-</body>
+<body
+        style="
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+    "
+>
 
+<h2>
+    Xin chào
+    <span th:text="${name}"></span> 👋
+</h2>
+
+<p>
+    Chào mừng bạn đến với
+    <strong>Airline Booking System</strong>.
+</p>
+
+<p>
+    Tài khoản của bạn đã được tạo thành công.
+</p>
+
+<p>
+    Giờ đây bạn có thể:
+</p>
+
+<ul>
+    <li>Đặt vé máy bay nhanh chóng</li>
+    <li>Quản lý lịch sử chuyến bay</li>
+    <li>Theo dõi trạng thái booking</li>
+    <li>Nhận ưu đãi và thông báo mới nhất</li>
+</ul>
+
+<p>
+    Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi ✈️
+</p>
+
+<br>
+
+<p>
+    Trân trọng,
+</p>
+
+<p>
+    <strong>Airline Booking Team</strong>
+</p>
+
+</body>
 </html>

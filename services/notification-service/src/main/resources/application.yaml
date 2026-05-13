@@ -5,14 +5,28 @@ spring:
   application:
     name: notification-service
 
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    consumer:
+      group-id: notification-group
+
+      auto-offset-reset: earliest
+
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+
+      properties:
+        spring.json.trusted.packages: "*"
+
   mail:
-    default-encoding: UTF-8
     host: smtp.gmail.com
-    username: your-email.gmail.com
-    password: your-password
     port: 587
-    protocol: smtp
-    test-connection: false
+
+    username: dunghyun46@gmail.com
+    password: ambu wpbf ynqf hgrt
+
     properties:
       mail:
         smtp:
