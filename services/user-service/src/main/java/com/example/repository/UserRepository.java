@@ -17,7 +17,14 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<Users, Long>, JpaSpecificationExecutor<Users> {
 
 
-    Users findByEmailAndDeletedIsFalse(String email);
+    Optional<Users> findByEmailAndDeletedIsFalse(String email);
+
+    Optional<Users> findByIdAndDeletedIsFalseAndActiveIsTrue(Long userId);
+
+    Optional<Users> findByEmailAndDeletedIsFalseAndActiveIsTrue(String email);
+
+    boolean existsByEmail(String email);
+
     List<Users> findAllByDeletedIsFalse();
     Optional<Users> findByIdAndDeletedIsFalse(Long id);
     Users findByEmail(String email);
@@ -25,5 +32,40 @@ public interface UserRepository extends JpaRepository<Users, Long>, JpaSpecifica
     @Modifying
     @Query(value = "Update users set phone = ?3, fullName = ?4 where id = ?5", nativeQuery = true)
     UserResponse updateUser(String phone, String fullName, Long id);
+
+    long count();
+    long countByActiveIsTrueAndDeletedIsFalse();
+    long countByActiveIsFalseAndDeletedIsFalse();
+    long countByDeletedIsTrue();
+
+    @Modifying
+    @Query(value = """
+        SELECT TO_CHAR(u.created_at, 'YYYY-MM-DD') AS label,
+               COUNT(*) AS total
+        FROM users u
+        GROUP BY TO_CHAR(u.created_at, 'YYYY-MM-DD')
+        ORDER BY label
+        """, nativeQuery = true)
+    List<Object[]> countUsersByDay();
+
+    @Modifying
+    @Query(value = """
+        SELECT TO_CHAR(u.created_at, 'IYYY-IW') AS label,
+               COUNT(*) AS total
+        FROM users u
+        GROUP BY TO_CHAR(u.created_at, 'IYYY-IW')
+        ORDER BY label
+        """, nativeQuery = true)
+    List<Object[]> countUsersByWeek();
+
+    @Modifying
+    @Query(value = """
+        SELECT TO_CHAR(u.created_at, 'YYYY-MM') AS label,
+               COUNT(*) AS total
+        FROM users u
+        GROUP BY TO_CHAR(u.created_at, 'YYYY-MM')
+        ORDER BY label
+        """, nativeQuery = true)
+    List<Object[]> countUsersByMonth();
 
 }

@@ -1,6 +1,6 @@
 package com.example.payload.response;
 
-import com.example.payload.dto.UserDTO;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,11 +9,11 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AuthResponse {
+
 
     private String accessToken;
     private String refreshToken;
-    private String message;
-    private String title;
     private UserResponse user;
 }

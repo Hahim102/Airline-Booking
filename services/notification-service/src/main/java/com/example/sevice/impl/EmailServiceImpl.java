@@ -3,7 +3,9 @@ package com.example.sevice.impl;
 
 import java.nio.charset.StandardCharsets;
 
+import com.example.enums.ErrorCode;
 import com.example.event.EmailEvent;
+import com.example.exception.AppException;
 import com.example.payload.dto.MessageDTO;
 import com.example.sevice.EmailService;
 import jakarta.mail.MessagingException;
@@ -60,7 +62,7 @@ public class EmailServiceImpl implements EmailService {
             mailSender.send(message);
 
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new AppException(ErrorCode.MAIL_SERVER_ERROR);
         }
     }
     private String getTemplateFile(String template) {
@@ -85,13 +87,11 @@ public class EmailServiceImpl implements EmailService {
             MimeMessage message = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, StandardCharsets.UTF_8.name());
 
-            //load template email with content
             Context context = new Context();
             context.setVariable("name", messageDTO.getToName());
             context.setVariable("content", messageDTO.getContent());
             String html = templateEngine.process("welcome-email", context);
 
-            ///send email
             helper.setTo(messageDTO.getTo());
             helper.setText(html, true);
             helper.setSubject(messageDTO.getSubject());

@@ -1,17 +1,22 @@
 package com.example.service.impl;
 
+import com.example.enums.ErrorCode;
+import com.example.enums.StatisticType;
+import com.example.enums.UserRole;
+import com.example.exception.AppException;
 import com.example.model.Users;
 import com.example.payload.dto.CreateUserByAdminDTO;
 import com.example.payload.dto.UpdateUserProfileDTO;
 import com.example.payload.dto.UserSearchFilterDTO;
 import com.example.payload.response.CreateUserResponse;
+import com.example.payload.response.UserRegistrationStatsResponse;
 import com.example.payload.response.UserResponse;
+import com.example.payload.response.UserSummaryResponse;
 import com.example.repository.UserRepository;
 import com.example.repository.specification.UserSpecification;
 import com.example.service.UserService;
 import com.example.util.ModelMapperUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -34,33 +39,37 @@ public class UserServiceImpl implements UserService {
     private static final String DEFAULT_PASSWORD = "Admin@123";
 
     @Override
-    public UserResponse getUserByEmail(String email) throws Exception {
-        Users users = userRepository.findByEmailAndDeletedIsFalse(email);
-
-        if(users == null) {
-            throw new Exception("User not found with email: " + email);
+    public UserResponse getUserByEmail(String email) {
+        Users users = userRepository.findByEmail(email);
+        if (users == null) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
         }
+
         return ModelMapperUtil.mapper(users, UserResponse.class);
     }
 
     @Override
-    public UserResponse getUserById(Long id) throws Exception {
-        Users users = userRepository.findByIdAndDeletedIsFalse(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    public UserResponse getUserById(Long id) {
+        Users users = userRepository.findById(id)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         return ModelMapperUtil.mapper(users, UserResponse.class);
     }
 
     @Override
     public List<UserResponse> getAllUsers() {
-        List<Users> users = userRepository.findAllByDeletedIsFalse();
+        List<Users> users = userRepository.findAll();
         return ModelMapperUtil.mapList(users, UserResponse.class);
     }
 
     @Override
-    public void updateIsActiveStatus(Long userId, boolean isActive) throws Exception {
+    public void updateIsActiveStatus(Long userId, boolean isActive) {
         Users user = userRepository.findByIdAndDeletedIsFalse(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getRole() == UserRole.ROLE_SYSTEM_ADMIN) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
 
         user.setActive(isActive);
         user.setUpdatedAt(LocalDateTime.now());
@@ -69,9 +78,13 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public void deleteUser(Long userId) throws Exception {
+    public void deleteUser(Long userId) {
         Users user = userRepository.findByIdAndDeletedIsFalse(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getRole() == UserRole.ROLE_SYSTEM_ADMIN) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
 
         user.setDeleted(true);
         user.setActive(false);
@@ -80,10 +93,9 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public CreateUserResponse createUser(CreateUserByAdminDTO request) throws Exception {
-        Users existingUser = userRepository.findByEmailAndDeletedIsFalse(request.getEmail());
-        if (existingUser != null) {
-            throw new Exception("Email already exists");
+    public CreateUserResponse createUser(CreateUserByAdminDTO request) {
+        if(userRepository.existsByEmail(request.getEmail())) {
+            throw new AppException(ErrorCode.EMAIL_ALREADY_USED);
         }
 
         Users newUser = Users.builder()
@@ -106,9 +118,13 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     @Override
-    public UserResponse updateUserProfile(Long userId, UpdateUserProfileDTO updateRequest) throws Exception {
+    public UserResponse updateUserProfile(Long userId, UpdateUserProfileDTO updateRequest) {
         Users user = userRepository.findByIdAndDeletedIsFalse(userId)
-                .orElseThrow(() -> new Exception("User not found with ID: " + userId));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getRole() == UserRole.ROLE_SYSTEM_ADMIN) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
 
         if (updateRequest.getFullName() != null && !updateRequest.getFullName().isBlank()) {
             user.setFullName(updateRequest.getFullName());
@@ -167,4 +183,37 @@ public class UserServiceImpl implements UserService {
                 })
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public UserSummaryResponse getUserSummary() {
+        long totalUsers = userRepository.count();
+        long activeUsers = userRepository.countByActiveIsTrueAndDeletedIsFalse();
+        long inactiveUsers = userRepository.countByActiveIsFalseAndDeletedIsFalse();
+        long deletedUsers = userRepository.countByDeletedIsTrue();
+
+        return UserSummaryResponse.builder()
+                .totalUsers(totalUsers)
+                .activeUsers(activeUsers)
+                .inactiveUsers(inactiveUsers)
+                .deletedUsers(deletedUsers)
+                .build();
+    }
+
+    @Override
+    public List<UserRegistrationStatsResponse> getUserRegistrationStats(StatisticType type) {
+        List<Object[]> rows = switch (type) {
+            case DAY -> userRepository.countUsersByDay();
+            case WEEK -> userRepository.countUsersByWeek();
+            case MONTH -> userRepository.countUsersByMonth();
+        };
+
+        return rows.stream()
+                .map(row -> UserRegistrationStatsResponse.builder()
+                        .label(String.valueOf(row[0]))
+                        .total(((Number) row[1]).longValue())
+                        .build())
+                .toList();
+    }
+
+
 }

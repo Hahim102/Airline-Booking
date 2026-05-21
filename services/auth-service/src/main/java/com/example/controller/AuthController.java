@@ -1,9 +1,14 @@
 package com.example.controller;
 
 
+import com.example.enums.ErrorCode;
+import com.example.enums.SuccessCode;
+import com.example.exception.AppException;
 import com.example.payload.dto.*;
+import com.example.payload.response.ApiResponse;
 import com.example.payload.response.AuthResponse;
 import com.example.payload.response.RecaptchaResponse;
+import com.example.payload.response.ResponseUtils;
 import com.example.service.AuthService;
 import com.example.service.Impl.RecaptchaService;
 import com.example.util.CookieUtils;
@@ -25,39 +30,36 @@ public class AuthController {
     private static final int REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody @Valid UserDTO userDTO, HttpServletResponse response) throws Exception {
+    public ResponseEntity<ApiResponse<AuthResponse>> register(@RequestBody @Valid UserDTO userDTO,
+                                                              HttpServletResponse response) {
+        RecaptchaResponse captchaResponse =
+                recaptchaService.verify(userDTO.getCaptchaToken());
+
+        if (captchaResponse == null || !captchaResponse.isSuccess()) {
+            throw new AppException(ErrorCode.CAPTCHA_INVALID);
+        }
+
         AuthResponse result = authService.register(userDTO);
 
-        RecaptchaResponse captchaResponse = recaptchaService.verify(userDTO.getCaptchaToken());
-        if (captchaResponse == null || !captchaResponse.isSuccess()) {
-            String errorMessage =
-                    captchaResponse != null
-                            && captchaResponse.getErrorCodes() != null
-                            ? captchaResponse.getErrorCodes().toString()
-                            : "Captcha verification failed";
-
-            return ResponseEntity
-                    .badRequest()
-                    .body(new AuthResponse(null, null, errorMessage, null, null));
-        }
-        AuthResponse authResponse =
-                new AuthResponse();
-        authResponse.setRefreshToken(null);
-
-        authResponse.setUser(result.getUser());
-
-        authResponse.setTitle(result.getTitle());
-
-        authResponse.setMessage(result.getMessage());
-        return ResponseEntity.ok(authResponse);
+        return ResponseUtils.success(
+                SuccessCode.USER_REGISTERED,
+                result
+        );
     }
 
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody @Valid LoginRequestDTO request, HttpServletResponse response) throws Exception {
-        RecaptchaResponse captchaResponse = recaptchaService.verify(request.getCaptchaToken());
+    public ResponseEntity<ApiResponse<AuthResponse>> login(@RequestBody @Valid LoginRequestDTO request,
+                                                           HttpServletResponse response) {
+        RecaptchaResponse captchaResponse =
+                recaptchaService.verify(request.getCaptchaToken());
 
-        AuthResponse result = authService.login(request.getEmail(), request.getPassword());
+        if (captchaResponse == null || !captchaResponse.isSuccess()) {
+            throw new AppException(ErrorCode.CAPTCHA_INVALID);
+        }
+
+        AuthResponse result =
+                authService.login(request.getEmail(), request.getPassword());
 
         cookieUtils.addRefreshTokenCookie(
                 response,
@@ -65,28 +67,19 @@ public class AuthController {
                 REFRESH_TOKEN_TTL_SECONDS
         );
 
-        if (captchaResponse == null || !captchaResponse.isSuccess()) {
-            String errorMessage =
-                    captchaResponse != null
-                            && captchaResponse.getErrorCodes() != null
-                            ? captchaResponse.getErrorCodes().toString()
-                            : "Captcha verification failed";
-
-            return ResponseEntity
-                    .badRequest()
-                    .body(new AuthResponse(null, null, errorMessage, null, null));
-        }
         AuthResponse authResponse = new AuthResponse();
         authResponse.setAccessToken(result.getAccessToken());
-        authResponse.setRefreshToken(null);
+        authResponse.setRefreshToken(result.getRefreshToken());
         authResponse.setUser(result.getUser());
-        authResponse.setTitle(result.getTitle());
-        authResponse.setMessage(result.getMessage());
-        return ResponseEntity.ok(authResponse);
+
+        return ResponseUtils.success(
+                SuccessCode.LOGIN_SUCCESS,
+                authResponse
+        );
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest request,
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request,
                                        HttpServletResponse response,
                                        @RequestHeader(value = "Authorization",
                                                required = false)
@@ -105,16 +98,17 @@ public class AuthController {
 
         cookieUtils.clearRefreshTokenCookie(response);
 
-        return ResponseEntity.ok().build();
+        return ResponseUtils.success(
+                SuccessCode.LOGOUT_SUCCESS,
+                null
+        );
     }
+
     @PostMapping("/refresh")
-    public ResponseEntity<AuthResponse> refresh(HttpServletRequest request, HttpServletResponse response) throws Exception {
+    public ResponseEntity<ApiResponse<AuthResponse>> refresh(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken =
                 cookieUtils.extractRefreshTokenFromCookies(request);
 
-        System.out.println(
-                "Refresh token: " + refreshToken
-        );
         AuthResponse result =
                 authService.refresh(refreshToken);
         cookieUtils.addRefreshTokenCookie(
@@ -122,53 +116,71 @@ public class AuthController {
         );
         AuthResponse authResponse = new AuthResponse();
         authResponse.setAccessToken(result.getAccessToken());
+        authResponse.setRefreshToken(result.getRefreshToken());
         authResponse.setUser(result.getUser());
-        return ResponseEntity.ok(authResponse);
+        return ResponseUtils.success(
+                SuccessCode.REFRESH_TOKEN_SUCCESS,
+                authResponse
+        );
     }
 
     @PutMapping("/update-profile")
-    public ResponseEntity<AuthResponse> updateProfile(@RequestParam Long userId, @RequestBody @Valid UserDTO userDTO) throws Exception {
+    public ResponseEntity<ApiResponse<AuthResponse>> updateProfile(@RequestParam Long userId, @RequestBody @Valid UserDTO userDTO) {
         AuthResponse authResponse = authService.updateProfile(userId, userDTO);
-        return ResponseEntity.ok(authResponse);
+        return ResponseUtils.success(
+                SuccessCode.PROFILE_UPDATED,
+                authResponse
+        );
     }
 
     @PutMapping("/update-password")
-    public ResponseEntity<String> updatePassword(@RequestParam Long userId, @RequestBody @Valid PasswordDTO passwordDTO) throws Exception {
+    public ResponseEntity<ApiResponse<Void>> updatePassword(@RequestParam Long userId, @RequestBody @Valid PasswordDTO passwordDTO) {
         authService.updatePassword(userId, passwordDTO);
-        return ResponseEntity.ok("Password updated successfully");
+        return ResponseUtils.success(
+                SuccessCode.PASSWORD_UPDATED,
+                null
+        );
     }
     @PostMapping("/verify-otp")
-    public ResponseEntity<AuthResponse> verifyOtp(
-            @RequestBody VerifyOtpDTO request
+    public ResponseEntity<ApiResponse<Void>> verifyOtp(
+            @RequestBody @Valid VerifyOtpDTO request
     ) {
-        return ResponseEntity.ok(
-                authService.verifyOtp(request)
+        authService.verifyOtp(request);
+        return ResponseUtils.success(
+                SuccessCode.OTP_VERIFIED,
+                null
         );
     }
     @PostMapping("/forgot-password")
-    public ResponseEntity<AuthResponse> forgotPassword(
-            @RequestBody ForgotPasswordDTO request
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @RequestBody @Valid ForgotPasswordDTO request
     ) {
-        return ResponseEntity.ok(
-                authService.forgotPassword(request)
+        authService.forgotPassword(request);
+        return ResponseUtils.success(
+                SuccessCode.EMAIL_SENT_SUCCESS,
+                null
         );
     }
 
     @PostMapping("/confirm-reset-password")
-    public ResponseEntity<AuthResponse> confirmResetPassword(
-            @RequestBody VerifyOtpDTO request
+    public ResponseEntity<ApiResponse<Void>> confirmResetPassword(
+            @RequestBody @Valid VerifyOtpDTO request
     ) {
-        return ResponseEntity.ok(
-                authService.confirmResetPassword(request)
+        authService.confirmResetPassword(request);
+        return ResponseUtils.success(
+                SuccessCode.CONFIRM_RESET_PASSWORD_SUCCESS,
+                null
         );
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<AuthResponse> resetPassword(
-            @RequestBody ResetPasswordDTO request
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @RequestBody @Valid ResetPasswordDTO request
     ) {
-        return ResponseEntity.ok(
-                authService.resetPassword(request)
+        authService.resetPassword(request);
+        return ResponseUtils.success(
+                SuccessCode.PASSWORD_RESET_SUCCESS,
+                null
         );
     }
 

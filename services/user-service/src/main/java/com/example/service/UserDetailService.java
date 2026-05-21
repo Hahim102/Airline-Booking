@@ -1,6 +1,8 @@
 package com.example.service;
 
 
+import com.example.enums.ErrorCode;
+import com.example.exception.AppException;
 import com.example.model.Users;
 import com.example.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,11 +23,10 @@ public class UserDetailService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        Users users = userRepository.findByEmailAndDeletedIsFalse(email);
+        Users users = userRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(email)
+                .orElseThrow(() ->
+                        new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if (users == null) {
-            throw new UsernameNotFoundException("User not found with email: " + email);
-        }
         GrantedAuthority grantedAuthority = new SimpleGrantedAuthority(users.getRole().toString());
         Collection<GrantedAuthority> grantedAuthorities = Collections.singleton(grantedAuthority);
 

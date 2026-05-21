@@ -1,17 +1,16 @@
 package com.example.controller;
 
 
+import com.example.enums.StatisticType;
+import com.example.enums.SuccessCode;
 import com.example.payload.dto.CreateUserByAdminDTO;
-import com.example.payload.dto.UserDTO;
 import com.example.payload.dto.UpdateUserProfileDTO;
 import com.example.payload.dto.UserSearchFilterDTO;
-import com.example.payload.response.CreateUserResponse;
-import com.example.payload.response.UserResponse;
+import com.example.payload.response.*;
 import com.example.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,59 +23,68 @@ public class UserController {
     public final UserService userService;
 
     @GetMapping("/profile")
-    public ResponseEntity<UserResponse> getUserProfile(@RequestHeader("X-User-Email") String email) throws Exception {
+    public ResponseEntity<ApiResponse<UserResponse>> getUserProfile(@RequestHeader("X-User-Email") String email) {
             UserResponse user = userService.getUserByEmail(email);
-            return ResponseEntity.ok(user);
+            return ResponseUtils.success(SuccessCode.SUCCESS, user);
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getMypProfile(@RequestHeader("X-User-Email") String email) throws Exception {
+    public ResponseEntity<ApiResponse<UserResponse>> getMypProfile(@RequestHeader("X-User-Email") String email) {
         UserResponse user = userService.getUserByEmail(email);
-        return ResponseEntity.ok(user);
+        return ResponseUtils.success(SuccessCode.SUCCESS, user);
     }
 
     @GetMapping("/{userId}")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable Long userId) throws Exception {
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long userId) {
         UserResponse user = userService.getUserById(userId);
-        return ResponseEntity.ok(user);
+        return ResponseUtils.success(SuccessCode.SUCCESS, user);
     }
 
     @GetMapping()
-    public ResponseEntity<List<UserResponse>> getUsers() {
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getUsers() {
         List<UserResponse> users = userService.getAllUsers();
-        return ResponseEntity.ok(users);
+        return ResponseUtils.success(
+                SuccessCode.SUCCESS,
+                users
+        );
     }
 
     @PutMapping("/{userId}/status")
-    public ResponseEntity<String> updateIsActive(
+    public ResponseEntity<ApiResponse<Void>> updateIsActive(
             @PathVariable Long userId,
-            @RequestParam boolean isActive) throws Exception {
+            @RequestParam boolean isActive) {
         userService.updateIsActiveStatus(userId, isActive);
-        return ResponseEntity.ok("User active status updated successfully");
+        return ResponseUtils.success(SuccessCode.SUCCESS, null);
     }
 
-    @DeleteMapping("/{userId}")
-    public ResponseEntity<String> deleteUserById(@PathVariable Long userId) throws Exception {
+    @DeleteMapping("/{userId}/delete")
+    public ResponseEntity<ApiResponse<Void>> deleteUserById(@PathVariable Long userId) {
         userService.deleteUser(userId);
-        return ResponseEntity.ok("User deleted successfully");
+        return ResponseUtils.success(SuccessCode.USER_DELETED, null);
     }
 
-    @PutMapping("/{userId}")
-    public ResponseEntity<UserResponse> updateUserProfile(
+    @PutMapping("/{userId}/update-user-profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUserProfile(
             @PathVariable Long userId,
-            @RequestBody UpdateUserProfileDTO updateRequest) throws Exception {
+            @RequestBody UpdateUserProfileDTO updateRequest) {
         UserResponse updatedUser = userService.updateUserProfile(userId, updateRequest);
-        return ResponseEntity.ok(updatedUser);
+        return ResponseUtils.success(SuccessCode.PROFILE_UPDATED, updatedUser);
     }
 
     @PostMapping("/create-user")
-    public ResponseEntity<CreateUserResponse> createUser(@RequestBody CreateUserByAdminDTO request) throws Exception {
+    public ResponseEntity<ApiResponse<CreateUserResponse>> createUser(@RequestBody CreateUserByAdminDTO request) {
         CreateUserResponse createdUser = userService.createUser(request);
-        return ResponseEntity.ok(createdUser);
+        return ResponseUtils.success(SuccessCode.USER_CREATED, createdUser);
+    }
+
+    @GetMapping("/export-data")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getUsersForExport() {
+        List<UserResponse> users = userService.getAllUsers();
+        return ResponseUtils.success(SuccessCode.SUCCESS, users);
     }
 
     @GetMapping("/search")
-    public ResponseEntity<Page<UserResponse>> searchAndFilterUsers(
+    public ResponseEntity<ApiResponse<Page<UserResponse>>> searchAndFilterUsers(
             @RequestParam(required = false) String fullName,
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String phone,
@@ -96,7 +104,7 @@ public class UserController {
             try {
                 searchFilter.setRole(com.example.enums.UserRole.valueOf(role.toUpperCase()));
             } catch (IllegalArgumentException e) {
-                // Invalid role, ignore
+                throw new IllegalArgumentException("Invalid role value: " + role);
             }
         }
         
@@ -107,14 +115,31 @@ public class UserController {
         searchFilter.setSortOrder(sortOrder);
 
         Page<UserResponse> results = userService.searchAndFilterUsers(searchFilter);
-        return ResponseEntity.ok(results);
+        return ResponseUtils.success(
+                SuccessCode.SUCCESS,
+                results
+        );
     }
 
 
     @GetMapping("/contact-info")
-    public ResponseEntity<List<Map<String, String>>> getUsersContactInfo() {
+    public ResponseEntity<ApiResponse<List<Map<String, String>>>> getUsersContactInfo() {
         List<Map<String, String>> contactInfo = userService.getUsersContactInfo();
-        return ResponseEntity.ok(contactInfo);
+        return ResponseUtils.success(SuccessCode.SUCCESS, contactInfo);
+    }
+
+    @GetMapping("/statistics/summary")
+    public ResponseEntity<ApiResponse<UserSummaryResponse>> getUserSummary() {
+        UserSummaryResponse userSummary = userService.getUserSummary();
+        return ResponseUtils.success(SuccessCode.SUCCESS, userSummary);
+    }
+
+    @GetMapping("/statistics/registrations")
+    public ResponseEntity<ApiResponse<List<UserRegistrationStatsResponse>>> getUserRegistrationStats(
+            @RequestParam(defaultValue = "DAY") StatisticType type
+    ) {
+        List<UserRegistrationStatsResponse> userRegistrationStats = userService.getUserRegistrationStats(type);
+        return ResponseUtils.success(SuccessCode.SUCCESS, userRegistrationStats);
     }
 
 }

@@ -29,11 +29,21 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
         String email = request.getHeader("X-User-Email");
         String rolesHeader = request.getHeader("X-User-Roles");
 
+        System.out.println("===== HEADER AUTH FILTER =====");
+        System.out.println("URI = " + request.getRequestURI());
+        System.out.println("X-User-Email = " + email);
+        System.out.println("X-User-Roles = " + rolesHeader);
+
 
         if (email != null && rolesHeader != null) {
 
             Collection<GrantedAuthority> authorities = Arrays.stream(rolesHeader.split(","))
                     .map(String::trim)
+                    .map(role ->
+                            role.startsWith("ROLE_")
+                                    ? role
+                                    : "ROLE_" + role
+                    )
                     .map(SimpleGrantedAuthority::new)
                     .collect(Collectors.toList());
 

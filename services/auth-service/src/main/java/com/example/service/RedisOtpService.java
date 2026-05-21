@@ -8,6 +8,7 @@ public interface RedisOtpService {
 
     void deleteVerifyOtp(String email);
 
+
     void saveResetPasswordOtp(String email, String otp);
     String getResetPasswordOtp(String email);
     void deleteResetPasswordOtp(String email);

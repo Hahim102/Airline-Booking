@@ -1,8 +1,10 @@
 package com.example.service.Impl;
 
 import com.example.config.JwtProvider;
+import com.example.enums.ErrorCode;
 import com.example.enums.UserRole;
 import com.example.event.EmailEvent;
+import com.example.exception.AppException;
 import com.example.jwt.JwtUtils;
 import com.example.model.Users;
 import com.example.payload.dto.*;
@@ -15,7 +17,6 @@ import com.example.service.RedisTokenService;
 import com.example.service.UserDetailService;
 import com.example.util.ModelMapperUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -23,7 +24,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.Date;
@@ -55,11 +55,12 @@ public class AuthServiceImpl implements AuthService {
 
 
     @Override
-    public AuthResponse register(UserDTO request) throws Exception {
-        Users existingUsers = userRepository.findByEmailAndDeletedIsFalse(request.getEmail());
-        if (existingUsers != null) {
-            throw new Exception("Email already exists");
+    public AuthResponse register(UserDTO request) {
+        boolean existsUser = userRepository.existsByEmail(request.getEmail());
+        if (existsUser) {
+            throw new AppException(ErrorCode.USER_EXISTED);
         }
+
         Users newUsers = Users.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
@@ -91,13 +92,11 @@ public class AuthServiceImpl implements AuthService {
         try {
             kafkaProducerService.sendEmailEvent(event);
         } catch (Exception e) {
-            System.out.println("Kafka unavailable: " + e.getMessage());
+            throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
         }
 
         AuthResponse authResponse = new AuthResponse();
-        authResponse.setTitle("Hello " + savedUsers.getFullName());
-        authResponse.setMessage("Registration successful");
-
+        authResponse.setUser(ModelMapperUtil.mapper(savedUsers, UserResponse.class));
         return authResponse;
     }
 
@@ -111,13 +110,20 @@ public class AuthServiceImpl implements AuthService {
 
 
     @Override
-    public AuthResponse login(String email, String password) throws Exception {
+    public AuthResponse login(String email, String password) {
+        Users users = userRepository
+                .findByEmailAndDeletedIsFalseAndActiveIsTrue(email)
+                .orElseThrow(() ->
+                        new AppException(ErrorCode.AUTHENTICATION_FAILED));
+
+        if (!users.isActive()) {
+            throw new AppException(ErrorCode.USER_NOT_VERIFIED);
+        }
+
         Authentication authentication = authenticationManager.
                 authenticate(new UsernamePasswordAuthenticationToken(email, password));
-        Users users = userRepository.findByEmailAndDeletedIsFalse(email);
-        if (users == null) {
-            throw new RuntimeException("User not found");
-        }
+
+
         users.setLastLoginAt(LocalDateTime.now());
         userRepository.save(users);
 
@@ -126,10 +132,6 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtProvider.generateAccessToken(authentication, users.getId());
         String refreshToken = jwtProvider.generateRefreshToken(users.getId());
 
-//        refreshTokenRepository.save(
-//                new RefreshToken(null, refreshToken, users.getId(),
-//                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))
-//        );
 
         redisTokenService.saveRefreshToken(
                 users.getId(),
@@ -157,8 +159,6 @@ public class AuthServiceImpl implements AuthService {
         authResponse.setAccessToken(accessToken);
         authResponse.setRefreshToken(refreshToken);
         authResponse.setUser(userResponse);
-        authResponse.setTitle("Hello " + users.getFullName());
-        authResponse.setMessage("Login successful");
         return authResponse;
     }
 
@@ -209,20 +209,16 @@ public class AuthServiceImpl implements AuthService {
             }
 
         } catch (Exception e) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Invalid access token"
-            );
+            //
         }
 
-        if (refreshToken != null &&
-                JwtUtils.isTokenValid(refreshToken)) {
-
-            Long userId =
-                    JwtUtils.extractUserId(refreshToken);
-
-            redisTokenService.deleteRefreshToken(userId);
+        try {
+            if (refreshToken != null && JwtUtils.isTokenValid(refreshToken)) {
+                Long userId = JwtUtils.extractUserId(refreshToken);
+                redisTokenService.deleteRefreshToken(userId);
+            }
+        } catch (Exception e) {
+            //
         }
     }
 
@@ -282,20 +278,29 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse refresh(String refreshToken) {
 
         if (refreshToken == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Refresh token missing"
-            );
+            throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
-        if (!JwtUtils.isTokenValid(refreshToken)) {
-            throw new RuntimeException(
-                    "Invalid refresh token"
-            );
-        }
+        Long userId;
 
-        Long userId =
-                JwtUtils.extractUserId(refreshToken);
+        try {
+            if (!JwtUtils.isTokenValid(refreshToken)) {
+                throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
+            }
+
+            Date expiration = JwtUtils.extractAllClaims(refreshToken).getExpiration();
+
+            if (expiration.before(new Date())) {
+                throw new AppException(ErrorCode.REFRESH_TOKEN_EXPIRED);
+            }
+
+            userId = JwtUtils.extractUserId(refreshToken);
+
+        } catch (AppException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
+        }
 
 
         String redisToken =
@@ -304,19 +309,13 @@ public class AuthServiceImpl implements AuthService {
 
         if (redisToken == null ||
                 !redisToken.equals(refreshToken)) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Refresh token invalid"
-            );
+            throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         Users user = userRepository.findById(userId)
                 .filter(u -> u.isActive() && !u.isDeleted())
                 .orElseThrow(() ->
-                        new RuntimeException(
-                                "User inactive or deleted"
-                        ));
+                        new AppException(ErrorCode.USER_DISABLED));
 
         redisTokenService.deleteRefreshToken(userId);
 
@@ -362,12 +361,17 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void updatePassword(Long userId, PasswordDTO passwordDTO) throws Exception {
+    public void updatePassword(Long userId, PasswordDTO passwordDTO) {
         Users user = userRepository.findById(userId)
-                .orElseThrow(() -> new Exception("User not found with id: " + userId));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         if (!passwordEncoder.matches(passwordDTO.getCurrentPassword(), user.getPassword())) {
-            throw new Exception("Wrong password");
+            throw new AppException(ErrorCode.OLD_PASSWORD_INCORRECT);
         }
+
+        if (passwordEncoder.matches(passwordDTO.getNewPassword(), user.getPassword())) {
+            throw new AppException(ErrorCode.NEW_PASSWORD_DUPLICATE);
+        }
+
 
         user.setPassword(passwordEncoder.encode(passwordDTO.getNewPassword()));
         user.setUpdatedAt(LocalDateTime.now());
@@ -375,13 +379,14 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public AuthResponse updateProfile(Long userId, UserDTO userDTO) throws Exception {
-        Users user = userRepository.findById(userId)
-                .orElseThrow();
+    public AuthResponse updateProfile(Long id, UserDTO userDTO) {
+        Users user = userRepository.findByIdAndDeletedIsFalseAndActiveIsTrue(id)
+                .orElseThrow(() ->
+                        new AppException(ErrorCode.USER_NOT_FOUND));
 
-        Users existing = userRepository.findByEmailAndDeletedIsFalse(userDTO.getEmail());
-        if (existing != null && !existing.getId().equals(userId)) {
-            throw new RuntimeException("Email already in use");
+        if (!user.getEmail().equals(userDTO.getEmail())
+                && userRepository.existsByEmail(userDTO.getEmail())) {
+            throw new AppException(ErrorCode.EMAIL_ALREADY_USED);
         }
 
         user.setFullName(userDTO.getFullName());
@@ -395,30 +400,28 @@ public class AuthServiceImpl implements AuthService {
 
         AuthResponse authResponse = new AuthResponse();
         authResponse.setUser(userResponse);
-        authResponse.setMessage("Profile updated successfully");
-        authResponse.setTitle("Profile Update");
-
         return authResponse;
     }
     @Transactional
-    public AuthResponse verifyOtp(VerifyOtpDTO request) {
+    public void verifyOtp(VerifyOtpDTO request) {
 
-        System.out.println("EMAIL REQUEST = " + request.getEmail());
-        System.out.println("OTP REQUEST = " + request.getOtp());
         String redisOtp = redisOtpService.getVerifyOtp(request.getEmail());
-        System.out.println("OTP REDIS = " + redisOtp);
 
         if (redisOtp == null) {
-            throw new RuntimeException("OTP expired or not found");
+            throw new AppException(ErrorCode.OTP_NOT_FOUND);
         }
 
         if (!redisOtp.equals(request.getOtp())) {
-            throw new RuntimeException("Invalid OTP");
+            throw new AppException(ErrorCode.OTP_INVALID);
         }
 
         Users user = userRepository.findByEmail(request.getEmail());
         if (user == null) {
-            throw new RuntimeException("User not found with email: " + request.getEmail());
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        if (user.isActive()) {
+            throw new AppException(ErrorCode.USER_ALREADY_VERIFIED);
         }
 
         user.setActive(true);
@@ -426,21 +429,15 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         redisOtpService.deleteVerifyOtp(request.getEmail());
-
-        AuthResponse authResponse = new AuthResponse();
-        authResponse.setMessage("OTP verified successfully");
-        return authResponse;
     }
 
     @Override
-    public AuthResponse forgotPassword(ForgotPasswordDTO request) {
-        Users user = userRepository.findByEmailAndDeletedIsFalse(
-                request.getEmail()
-        );
-
-        if (user == null) {
-            throw new RuntimeException("Email not found");
-        }
+    public void forgotPassword(ForgotPasswordDTO request) {
+        Users user = userRepository
+                .findByEmailAndDeletedIsFalseAndActiveIsTrue(
+                        request.getEmail())
+                .orElseThrow(() ->
+                        new AppException(ErrorCode.USER_NOT_FOUND));
 
         String otp = generateOtp();
 
@@ -462,65 +459,53 @@ public class AuthServiceImpl implements AuthService {
         try {
             kafkaProducerService.sendEmailEvent(event);
         } catch (Exception e) {
-            System.out.println("Kafka unavailable: " + e.getMessage());
+            throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
         }
-
-        AuthResponse response = new AuthResponse();
-        response.setMessage("OTP has been sent to your email");
-        return response;
     }
 
     @Override
-    public AuthResponse confirmResetPassword(VerifyOtpDTO request) {
+    public void confirmResetPassword(VerifyOtpDTO request) {
         String redisOtp = redisOtpService.getResetPasswordOtp(request.getEmail());
 
         if (redisOtp == null) {
-            throw new RuntimeException("OTP expired or not found");
+            throw new AppException(ErrorCode.OTP_EXPIRED);
         }
 
         if (!redisOtp.equals(request.getOtp())) {
-            throw new RuntimeException("Invalid OTP");
+            throw new AppException(ErrorCode.OTP_INVALID);
         }
 
-        Users user = userRepository.findByEmailAndDeletedIsFalse(request.getEmail());
-        if (user == null) {
-            throw new RuntimeException("User not found");
-        }
+        Users user = userRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(request.getEmail())
+                .orElseThrow(() ->
+                        new AppException(ErrorCode.USER_NOT_FOUND));
 
-        // Mark OTP as verified - don't delete it yet
         redisOtpService.markResetPasswordOtpAsVerified(request.getEmail());
-
-        AuthResponse response = new AuthResponse();
-        response.setMessage("OTP verified successfully. You can now reset your password.");
-        return response;
     }
 
     @Override
-    public AuthResponse resetPassword(ResetPasswordDTO request) {
+    public void resetPassword(ResetPasswordDTO request) {
         String redisOtp = redisOtpService.getResetPasswordOtp(
                 request.getEmail()
         );
 
         if (redisOtp == null) {
-            throw new RuntimeException("OTP expired or not found");
+            throw new AppException(ErrorCode.OTP_EXPIRED);
         }
 
         if (!redisOtp.equals(request.getOtp())) {
-            throw new RuntimeException("Invalid OTP");
+            throw new AppException(ErrorCode.OTP_INVALID);
         }
 
 
         if (!redisOtpService.isResetPasswordOtpVerified(request.getEmail())) {
-            throw new RuntimeException("OTP not verified. Please verify OTP first.");
+            throw new AppException(ErrorCode.OTP_VERIFY_FAILED);
         }
 
-        Users user = userRepository.findByEmailAndDeletedIsFalse(
-                request.getEmail()
-        );
+        Users user = userRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(
+                request.getEmail())
+                .orElseThrow(() ->
+                        new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if (user == null) {
-            throw new RuntimeException("User not found");
-        }
 
         user.setPassword(
                 passwordEncoder.encode(request.getNewPassword())
@@ -532,9 +517,6 @@ public class AuthServiceImpl implements AuthService {
 
         redisOtpService.deleteResetPasswordOtp(request.getEmail());
 
-        AuthResponse response = new AuthResponse();
-        response.setMessage("Password reset successfully");
-        return response;
     }
 
     private String generateOtp() {
