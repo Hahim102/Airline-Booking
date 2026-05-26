@@ -5,8 +5,8 @@ import com.example.enums.StatisticType;
 import com.example.exception.AppException;
 import com.example.payload.response.UserRegistrationStatsResponse;
 import com.example.payload.response.UserSummaryResponse;
+import com.example.service.util.PdfStyleProvider;
 import com.lowagie.text.Document;
-import com.lowagie.text.Paragraph;
 import com.lowagie.text.Table;
 import com.lowagie.text.pdf.PdfWriter;
 import org.springframework.stereotype.Service;
@@ -30,43 +30,43 @@ public class UserAnalyticsPdfExportService {
 
             document.open();
 
-            document.add(new Paragraph("USER ANALYTICS REPORT"));
-            document.add(new Paragraph("Generated At: " + LocalDateTime.now()));
-            document.add(new Paragraph("Statistic Type: " + type.name()));
-            document.add(new Paragraph(" "));
+            document.add(PdfStyleProvider.createTitleParagraph("USER ANALYTICS REPORT"));
+            document.add(PdfStyleProvider.createInfoParagraph("Generated At: " + LocalDateTime.now()));
+            document.add(PdfStyleProvider.createInfoParagraph("Statistic Type: " + type.name()));
+            document.add(PdfStyleProvider.createSpacerParagraph());
 
-            document.add(new Paragraph("Summary"));
+            document.add(PdfStyleProvider.createHeadingParagraph("Summary"));
             Table summaryTable = new Table(2);
-            summaryTable.setWidth(100);
+            PdfStyleProvider.configureTable(summaryTable);
 
-            summaryTable.addCell("Metric");
-            summaryTable.addCell("Value");
+            summaryTable.addCell(PdfStyleProvider.createHeaderCell("Summary"));
+            summaryTable.addCell(PdfStyleProvider.createHeaderCell("Value"));
 
-            summaryTable.addCell("Total Users");
-            summaryTable.addCell(String.valueOf(summary.getTotalUsers()));
+            summaryTable.addCell(PdfStyleProvider.createDataCell("Total Users"));
+            summaryTable.addCell(PdfStyleProvider.createDataCell(String.valueOf(summary.getTotalUsers())));
 
-            summaryTable.addCell("Active Users");
-            summaryTable.addCell(String.valueOf(summary.getActiveUsers()));
+            summaryTable.addCell(PdfStyleProvider.createDataCell("Active Users"));
+            summaryTable.addCell(PdfStyleProvider.createDataCell(String.valueOf(summary.getActiveUsers())));
 
-            summaryTable.addCell("Inactive Users");
-            summaryTable.addCell(String.valueOf(summary.getInactiveUsers()));
+            summaryTable.addCell(PdfStyleProvider.createDataCell("Inactive Users"));
+            summaryTable.addCell(PdfStyleProvider.createDataCell(String.valueOf(summary.getInactiveUsers())));
 
-            summaryTable.addCell("Deleted Users");
-            summaryTable.addCell(String.valueOf(summary.getDeletedUsers()));
+            summaryTable.addCell(PdfStyleProvider.createDataCell("Deleted Users"));
+            summaryTable.addCell(PdfStyleProvider.createDataCell(String.valueOf(summary.getDeletedUsers())));
 
             document.add(summaryTable);
-            document.add(new Paragraph(" "));
+            document.add(PdfStyleProvider.createSpacerParagraph());
 
-            document.add(new Paragraph("User Registrations"));
+            document.add(PdfStyleProvider.createHeadingParagraph("User Registrations"));
             Table registrationTable = new Table(2);
-            registrationTable.setWidth(100);
+            PdfStyleProvider.configureTable(registrationTable);
 
-            registrationTable.addCell("Label");
-            registrationTable.addCell("Total Registrations");
+            registrationTable.addCell(PdfStyleProvider.createHeaderCell("Label"));
+            registrationTable.addCell(PdfStyleProvider.createHeaderCell("Total Registrations"));
 
             for (UserRegistrationStatsResponse item : registrations) {
-                registrationTable.addCell(item.getLabel());
-                registrationTable.addCell(String.valueOf(item.getTotal()));
+                registrationTable.addCell(PdfStyleProvider.createDataCell(item.getLabel()));
+                registrationTable.addCell(PdfStyleProvider.createDataCell(String.valueOf(item.getTotal())));
             }
 
             document.add(registrationTable);

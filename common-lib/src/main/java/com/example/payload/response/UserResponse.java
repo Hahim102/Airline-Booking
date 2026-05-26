@@ -23,4 +23,5 @@ public class UserResponse {
     private boolean deleted;
     private LocalDateTime createdAt;
     private LocalDateTime lastLoginAt;
+    private String avatarUrl;
 }

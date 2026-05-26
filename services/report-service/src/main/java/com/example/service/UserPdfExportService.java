@@ -3,12 +3,11 @@ package com.example.service;
 import com.example.enums.ErrorCode;
 import com.example.exception.AppException;
 import com.example.payload.response.UserResponse;
+import com.example.service.util.PdfStyleProvider;
 import com.lowagie.text.*;
-import com.lowagie.text.Font;
 import com.lowagie.text.pdf.PdfWriter;
 import org.springframework.stereotype.Service;
 
-import java.awt.*;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -25,42 +24,24 @@ public class UserPdfExportService {
 
             document.open();
 
-            Font titleFont = new Font(Font.HELVETICA, 18, Font.BOLD);
-            Font subTitleFont = new Font(Font.HELVETICA, 13, Font.BOLD);
-            Font infoFont = new Font(Font.HELVETICA, 10, Font.NORMAL);
-            Font headerFont = new Font(Font.HELVETICA, 10, Font.BOLD, Color.WHITE);
-            Font dataFont = new Font(Font.HELVETICA, 9, Font.NORMAL);
-
-            Paragraph title = new Paragraph("AIRLINE BOOKING SYSTEM", titleFont);
-            title.setAlignment(Element.ALIGN_CENTER);
-            document.add(title);
-
-            Paragraph subTitle = new Paragraph("USER REPORT EXPORT", subTitleFont);
-            subTitle.setAlignment(Element.ALIGN_CENTER);
-            subTitle.setSpacingAfter(15);
-            document.add(subTitle);
+            document.add(PdfStyleProvider.createTitleParagraph("AIRLINE BOOKING SYSTEM"));
+            document.add(PdfStyleProvider.createSubTitleParagraph("USER REPORT EXPORT"));
 
             DateTimeFormatter formatter =
                     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-            document.add(new Paragraph(
-                    "Generated At: " + LocalDateTime.now().format(formatter),
-                    infoFont
+            document.add(PdfStyleProvider.createInfoParagraph(
+                    "Generated At: " + LocalDateTime.now().format(formatter)
             ));
 
-            document.add(new Paragraph(
-                    "Total Users: " + users.size(),
-                    infoFont
+            document.add(PdfStyleProvider.createInfoParagraph(
+                    "Total Users: " + users.size()
             ));
 
-            Paragraph space = new Paragraph(" ");
-            space.setSpacingAfter(10);
-            document.add(space);
+            document.add(PdfStyleProvider.createSpacerParagraph());
 
             Table table = new Table(7);
-            table.setWidth(100);
-            table.setPadding(4);
-            table.setSpacing(0);
+            PdfStyleProvider.configureTable(table);
 
             String[] columns = {
                     "ID",
@@ -73,22 +54,19 @@ public class UserPdfExportService {
             };
 
             for (String column : columns) {
-                Cell cell = new Cell(new Phrase(column, headerFont));
-                cell.setHeader(true);
-                cell.setBackgroundColor(new Color(52, 120, 246));
-                table.addCell(cell);
+                table.addCell(PdfStyleProvider.createHeaderCell(column));
             }
 
             table.endHeaders();
 
             for (UserResponse user : users) {
-                table.addCell(new Phrase(String.valueOf(user.getId()), dataFont));
-                table.addCell(new Phrase(user.getFullName(), dataFont));
-                table.addCell(new Phrase(user.getEmail(), dataFont));
-                table.addCell(new Phrase(user.getRole().toString(), dataFont));
-                table.addCell(new Phrase(user.isActive() ? "Active" : "Inactive", dataFont));
-                table.addCell(new Phrase(user.isDeleted() ? "Deleted" : "Not Deleted", dataFont));
-                table.addCell(new Phrase(String.valueOf(user.getCreatedAt()), dataFont));
+                table.addCell(PdfStyleProvider.createDataCell(String.valueOf(user.getId())));
+                table.addCell(PdfStyleProvider.createDataCell(user.getFullName()));
+                table.addCell(PdfStyleProvider.createDataCell(user.getEmail()));
+                table.addCell(PdfStyleProvider.createDataCell(user.getRole().toString()));
+                table.addCell(PdfStyleProvider.createDataCell(user.isActive() ? "Active" : "Inactive"));
+                table.addCell(PdfStyleProvider.createDataCell(user.isDeleted() ? "Deleted" : "Not Deleted"));
+                table.addCell(PdfStyleProvider.createDataCell(String.valueOf(user.getCreatedAt())));
             }
 
             document.add(table);

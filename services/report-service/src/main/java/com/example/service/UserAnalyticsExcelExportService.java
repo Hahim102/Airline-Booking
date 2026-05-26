@@ -5,6 +5,7 @@ import com.example.enums.StatisticType;
 import com.example.exception.AppException;
 import com.example.payload.response.UserRegistrationStatsResponse;
 import com.example.payload.response.UserSummaryResponse;
+import com.example.service.util.ExcelCellStyleProvider;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -29,33 +30,9 @@ public class UserAnalyticsExcelExportService {
         ) {
             Sheet sheet = workbook.createSheet("User Analytics");
 
-            Font titleFont = workbook.createFont();
-            titleFont.setBold(true);
-            titleFont.setFontHeightInPoints((short) 18);
-
-            Font headerFont = workbook.createFont();
-            headerFont.setBold(true);
-            headerFont.setColor(IndexedColors.WHITE.getIndex());
-
-            CellStyle titleStyle = workbook.createCellStyle();
-            titleStyle.setFont(titleFont);
-            titleStyle.setAlignment(HorizontalAlignment.CENTER);
-
-            CellStyle headerStyle = workbook.createCellStyle();
-            headerStyle.setFont(headerFont);
-            headerStyle.setFillForegroundColor(IndexedColors.BLUE.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            headerStyle.setAlignment(HorizontalAlignment.CENTER);
-            headerStyle.setBorderTop(BorderStyle.THIN);
-            headerStyle.setBorderBottom(BorderStyle.THIN);
-            headerStyle.setBorderLeft(BorderStyle.THIN);
-            headerStyle.setBorderRight(BorderStyle.THIN);
-
-            CellStyle dataStyle = workbook.createCellStyle();
-            dataStyle.setBorderTop(BorderStyle.THIN);
-            dataStyle.setBorderBottom(BorderStyle.THIN);
-            dataStyle.setBorderLeft(BorderStyle.THIN);
-            dataStyle.setBorderRight(BorderStyle.THIN);
+            CellStyle titleStyle = ExcelCellStyleProvider.createTitleStyle(workbook);
+            CellStyle headerStyle = ExcelCellStyleProvider.createHeaderStyle(workbook);
+            CellStyle dataStyle = ExcelCellStyleProvider.createDataStyle(workbook);
 
             Row titleRow = sheet.createRow(0);
             Cell titleCell = titleRow.createCell(0);
@@ -76,6 +53,8 @@ public class UserAnalyticsExcelExportService {
             Row summaryHeader = sheet.createRow(5);
             summaryHeader.createCell(0).setCellValue("Summary");
             summaryHeader.getCell(0).setCellStyle(headerStyle);
+            summaryHeader.createCell(1).setCellValue("Value");
+            summaryHeader.getCell(1).setCellStyle(headerStyle);
 
             Row totalRow = sheet.createRow(6);
             totalRow.createCell(0).setCellValue("Total Users");
@@ -115,9 +94,7 @@ public class UserAnalyticsExcelExportService {
                 totalCell.setCellStyle(dataStyle);
             }
 
-            for (int i = 0; i <= 3; i++) {
-                sheet.autoSizeColumn(i);
-            }
+            ExcelCellStyleProvider.autoSizeColumns(sheet, 3);
 
             workbook.write(outputStream);
             return outputStream.toByteArray();

@@ -18,6 +18,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final HeaderAuthenticationFilter headerAuthenticationFilter;
+    private static final String[] USER_ENDPOINTS = {
+            "/api/users/me", "/api/users/me/update-profile", "/api/users/me/avatar",
+    };
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -25,7 +28,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .addFilterBefore(headerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/users/me").authenticated()
+                        .requestMatchers(USER_ENDPOINTS).authenticated()
                         .anyRequest().hasRole("SYSTEM_ADMIN")
                 );
 

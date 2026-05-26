@@ -26,16 +26,18 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
+        String userId = request.getHeader("X-User-Id");
         String email = request.getHeader("X-User-Email");
         String rolesHeader = request.getHeader("X-User-Roles");
 
         System.out.println("===== HEADER AUTH FILTER =====");
         System.out.println("URI = " + request.getRequestURI());
+        System.out.println("X-User-Id = " + userId);
         System.out.println("X-User-Email = " + email);
         System.out.println("X-User-Roles = " + rolesHeader);
 
 
-        if (email != null && rolesHeader != null) {
+        if (userId != null && email != null && rolesHeader != null) {
 
             Collection<GrantedAuthority> authorities = Arrays.stream(rolesHeader.split(","))
                     .map(String::trim)
@@ -47,8 +49,16 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
                     .map(SimpleGrantedAuthority::new)
                     .collect(Collectors.toList());
 
+            UserPrincipal principal =
+                    new UserPrincipal(
+                            Long.valueOf(
+                                    userId
+                            ),
+                            email
+                    );
+
             UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(email, null, authorities);
+                    new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
         }

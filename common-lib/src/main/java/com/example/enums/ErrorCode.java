@@ -27,6 +27,9 @@ public enum ErrorCode {
     OLD_PASSWORD_INCORRECT(400, "Old password is incorrect"),
     NEW_PASSWORD_DUPLICATE(400, "New password cannot be the same as the old password"),
     EXPORT_FAILED(400, "Failed to export data"),
+    FILE_NOT_FOUND(400, "File not found"),
+    FILE_TOO_LARGE(400, "File size exceeds the limit"),
+    UNSUPPORTED_FILE_TYPE(400, "Unsupported file type, Only JPG, PNG, WEBP are allowed"),
 
     
     // 401 UNAUTHORIZED
@@ -79,6 +82,7 @@ public enum ErrorCode {
     CACHE_WRITE_FAILED(500, "Failed to write cache"),
     MESSAGE_QUEUE_ERROR(500, "Message queue processing failed"),
 
+
     
     // 502 BAD GATEWAY
     
@@ -92,7 +96,13 @@ public enum ErrorCode {
     KAFKA_CONSUME_FAILED(503, "Kafka consume failed"),
     EMAIL_SEND_FAILED(503, "Email service unavailable"),
     SMS_SEND_FAILED(503, "SMS service unavailable"),
-    PUSH_NOTIFICATION_FAILED(503, "Push notification service unavailable");
+    PUSH_NOTIFICATION_FAILED(503, "Push notification service unavailable"),
+    STORAGE_ERROR(503, "Storage operation failed"),
+    UPLOAD_FAILED(503, "Upload failed"),
+    DELETE_FAILED(503, "Delete failed"),
+    GENERATE_PRESIGNED_URL_FAILED(503, "Generate presigned URL failed");
+
+
     int code;
     String message;
 

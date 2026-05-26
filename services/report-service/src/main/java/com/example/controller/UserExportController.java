@@ -2,6 +2,7 @@ package com.example.controller;
 
 import com.example.client.AnalyticsClient;
 import com.example.client.UserClient;
+import com.example.config.UserPrincipal;
 import com.example.enums.StatisticType;
 import com.example.payload.response.UserRegistrationStatsResponse;
 import com.example.payload.response.UserResponse;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,11 +32,10 @@ public class UserExportController {
     private final UserAnalyticsPdfExportService pdfExportAnalyticsService;
 
     @GetMapping("/users/excel")
-    public ResponseEntity<byte[]> exportUsersToExcel(
-            @RequestHeader("X-User-Email") String email,
-            @RequestHeader("X-User-Roles") String roles
-    ) {
-        List<UserResponse> users = userClient.getUsersForExport(email, roles);
+    public ResponseEntity<byte[]> exportUsersToExcel() {
+        List<UserResponse> users = userClient
+                .getUsersForExport()
+                .getData();
 
         byte[] file = excelExportUsersService.exportUsers(users);
 
@@ -47,11 +48,10 @@ public class UserExportController {
     }
 
     @GetMapping("/users/pdf")
-    public ResponseEntity<byte[]> exportUsersToPdf(
-            @RequestHeader("X-User-Email") String email,
-            @RequestHeader("X-User-Roles") String roles
-    ) {
-        List<UserResponse> users = userClient.getUsersForExport(email, roles);
+    public ResponseEntity<byte[]> exportUsersToPdf() {
+        List<UserResponse> users = userClient
+                .getUsersForExport()
+                .getData();
 
         byte[] file = pdfExportUsersService.exportUsers(users);
 
@@ -63,15 +63,17 @@ public class UserExportController {
 
     @GetMapping("/analytics/excel")
     public ResponseEntity<byte[]> exportUserAnalyticsExcel(
-            @RequestHeader("X-User-Email") String email,
-            @RequestHeader("X-User-Roles") String roles,
             @RequestParam(defaultValue = "DAY") StatisticType type
     ) {
         UserSummaryResponse summary =
-                analyticsClient.getUserSummary(email, roles);
+                analyticsClient
+                        .getUserSummary()
+                        .getData();
 
         List<UserRegistrationStatsResponse> registrations =
-                analyticsClient.getUserRegistrations(email, roles, type);
+                analyticsClient
+                        .getUserRegistrations()
+                        .getData();
 
         byte[] file = excelExportAnalyticsService.exportUserAnalytics(summary, registrations, type);
 
@@ -85,15 +87,17 @@ public class UserExportController {
     }
     @GetMapping("/analytics/pdf")
     public ResponseEntity<byte[]> exportUserAnalyticsPdf(
-            @RequestHeader("X-User-Email") String email,
-            @RequestHeader("X-User-Roles") String roles,
             @RequestParam(defaultValue = "DAY") StatisticType type
     ) {
         UserSummaryResponse summary =
-                analyticsClient.getUserSummary(email, roles);
+                analyticsClient
+                        .getUserSummary()
+                        .getData();
 
         List<UserRegistrationStatsResponse> registrations =
-                analyticsClient.getUserRegistrations(email, roles, type);
+                analyticsClient.
+                        getUserRegistrations()
+                        .getData();
 
         byte[] file = pdfExportAnalyticsService.exportUserAnalytics(summary, registrations, type);
 

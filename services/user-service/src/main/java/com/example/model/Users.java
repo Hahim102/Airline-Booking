@@ -42,6 +42,8 @@ public class Users {
     @Column(nullable = false)
     private boolean deleted;
 
+    private String avatarObjectName;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime deletedAt;

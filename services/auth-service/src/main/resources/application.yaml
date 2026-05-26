@@ -5,6 +5,7 @@ spring:
   application:
     name: auth-service
 
+
   kafka:
     bootstrap-servers: localhost:9092
 
@@ -34,6 +35,10 @@ app:
     refresh-cookie:
       secure: false
       same-site: Lax
+
+minio:
+  enabled: false
+
 eureka:
   instance:
     prefer-ip-address: true

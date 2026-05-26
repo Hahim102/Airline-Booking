@@ -1,17 +1,24 @@
 package com.example.controller;
 
 
+import com.example.config.UserPrincipal;
 import com.example.enums.StatisticType;
 import com.example.enums.SuccessCode;
 import com.example.payload.dto.CreateUserByAdminDTO;
 import com.example.payload.dto.UpdateUserProfileDTO;
+import com.example.payload.dto.UserDTO;
 import com.example.payload.dto.UserSearchFilterDTO;
 import com.example.payload.response.*;
 import com.example.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -19,6 +26,10 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
+@ConditionalOnProperty(
+        name = "minio.enabled",
+        havingValue = "true"
+)
 public class UserController {
     public final UserService userService;
 
@@ -140,6 +151,30 @@ public class UserController {
     ) {
         List<UserRegistrationStatsResponse> userRegistrationStats = userService.getUserRegistrationStats(type);
         return ResponseUtils.success(SuccessCode.SUCCESS, userRegistrationStats);
+    }
+
+    @PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UserAvatarResponse>> uploadAvatar(
+            @AuthenticationPrincipal
+            UserPrincipal principal,
+            @RequestParam("file") MultipartFile file
+    ) {
+        UserAvatarResponse avatarResponse = userService.uploadUserAvatar(principal.getId(), file);
+
+        return ResponseUtils.success(
+                SuccessCode.SUCCESS,
+                avatarResponse);
+    }
+
+    @PutMapping("/me/update-profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
+            @AuthenticationPrincipal
+            UserPrincipal principal,
+            @RequestBody @Valid UserDTO userDTO
+    ) {
+        UserResponse updateMyProfile = userService.updateProfile(principal.getId(), userDTO);
+
+        return ResponseUtils.success(SuccessCode.PROFILE_UPDATED, updateMyProfile);
     }
 
 }

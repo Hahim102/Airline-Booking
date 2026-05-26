@@ -69,8 +69,6 @@ public class AuthController {
 
         AuthResponse authResponse = new AuthResponse();
         authResponse.setAccessToken(result.getAccessToken());
-        authResponse.setRefreshToken(result.getRefreshToken());
-        authResponse.setUser(result.getUser());
 
         return ResponseUtils.success(
                 SuccessCode.LOGIN_SUCCESS,

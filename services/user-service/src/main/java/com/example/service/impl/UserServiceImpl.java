@@ -7,16 +7,16 @@ import com.example.exception.AppException;
 import com.example.model.Users;
 import com.example.payload.dto.CreateUserByAdminDTO;
 import com.example.payload.dto.UpdateUserProfileDTO;
+import com.example.payload.dto.UserDTO;
 import com.example.payload.dto.UserSearchFilterDTO;
-import com.example.payload.response.CreateUserResponse;
-import com.example.payload.response.UserRegistrationStatsResponse;
-import com.example.payload.response.UserResponse;
-import com.example.payload.response.UserSummaryResponse;
+import com.example.payload.response.*;
 import com.example.repository.UserRepository;
 import com.example.repository.specification.UserSpecification;
+import com.example.service.MinioStorageService;
 import com.example.service.UserService;
 import com.example.util.ModelMapperUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +25,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -32,11 +33,30 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(
+        name = "minio.enabled",
+        havingValue = "true"
+)
 public class UserServiceImpl implements UserService {
 
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private static final String DEFAULT_PASSWORD = "Admin@123";
+    private final MinioStorageService minioStorageService;
+
+    private UserResponse mapToUserResponse(Users user) {
+        UserResponse response = ModelMapperUtil.mapper(user, UserResponse.class);
+        if (user.getAvatarObjectName() != null && !user.getAvatarObjectName().isBlank()) {
+            response.setAvatarUrl(minioStorageService.getPresignedUrl(user.getAvatarObjectName()));
+        }
+        return response;
+    }
+
+    private List<UserResponse> mapToUserResponseList(List<Users> users) {
+        return users.stream()
+                .map(this::mapToUserResponse)
+                .collect(Collectors.toList());
+    }
 
     @Override
     public UserResponse getUserByEmail(String email) {
@@ -45,7 +65,7 @@ public class UserServiceImpl implements UserService {
             throw new AppException(ErrorCode.USER_NOT_FOUND);
         }
 
-        return ModelMapperUtil.mapper(users, UserResponse.class);
+        return mapToUserResponse(users);
     }
 
     @Override
@@ -53,13 +73,13 @@ public class UserServiceImpl implements UserService {
         Users users = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        return ModelMapperUtil.mapper(users, UserResponse.class);
+        return mapToUserResponse(users);
     }
 
     @Override
     public List<UserResponse> getAllUsers() {
         List<Users> users = userRepository.findAll();
-        return ModelMapperUtil.mapList(users, UserResponse.class);
+        return mapToUserResponseList(users);
     }
 
     @Override
@@ -142,8 +162,54 @@ public class UserServiceImpl implements UserService {
 
         Users users = userRepository.save(user);
 
+        return mapToUserResponse(users);
+    }
 
-        return ModelMapperUtil.mapper(users, UserResponse.class);
+    @Override
+    public UserAvatarResponse uploadUserAvatar(Long userId, MultipartFile file) {
+        Users user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+         String oldObjectName = user.getAvatarObjectName();
+
+         String objectName = minioStorageService.uploadObject(userId, file);
+
+         user.setAvatarObjectName(objectName);
+
+         userRepository.save(user);
+
+         if (oldObjectName != null) {
+             minioStorageService.deleteObject(oldObjectName);
+         }
+
+         UserAvatarResponse response = ModelMapperUtil.mapper(user, UserAvatarResponse.class);
+
+        response.setAvatarUrl(
+                minioStorageService.getPresignedUrl(objectName)
+        );
+
+         return response;
+    }
+
+    @Override
+    public UserResponse updateProfile(Long userId, UserDTO userDTO) {
+        Users user = userRepository.findByIdAndDeletedIsFalseAndActiveIsTrue(userId)
+                .orElseThrow(() ->
+                        new AppException(ErrorCode.USER_NOT_FOUND));
+
+        if (!user.getEmail().equals(userDTO.getEmail())
+                && userRepository.existsByEmail(userDTO.getEmail())) {
+            throw new AppException(ErrorCode.EMAIL_ALREADY_USED);
+        }
+
+        user.setFullName(userDTO.getFullName());
+        user.setEmail(userDTO.getEmail());
+        user.setPhone(userDTO.getPhone());
+        user.setUpdatedAt(LocalDateTime.now());
+
+        Users updatedUser = userRepository.save(user);
+
+        return mapToUserResponse(updatedUser);
     }
 
     @Override
@@ -167,7 +233,7 @@ public class UserServiceImpl implements UserService {
 
         Page<Users> usersPage = userRepository.findAll(specification, pageable);
 
-        return usersPage.map(user -> ModelMapperUtil.mapper(user, UserResponse.class));
+        return usersPage.map(this::mapToUserResponse);
     }
 
     @Override

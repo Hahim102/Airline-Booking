@@ -4,12 +4,11 @@ package com.example.service;
 import com.example.enums.StatisticType;
 import com.example.payload.dto.CreateUserByAdminDTO;
 import com.example.payload.dto.UpdateUserProfileDTO;
+import com.example.payload.dto.UserDTO;
 import com.example.payload.dto.UserSearchFilterDTO;
-import com.example.payload.response.CreateUserResponse;
-import com.example.payload.response.UserRegistrationStatsResponse;
-import com.example.payload.response.UserResponse;
-import com.example.payload.response.UserSummaryResponse;
+import com.example.payload.response.*;
 import org.springframework.data.domain.Page;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -24,6 +23,10 @@ public interface UserService {
     CreateUserResponse createUser(CreateUserByAdminDTO request);
 
     UserResponse updateUserProfile(Long userId, UpdateUserProfileDTO updateRequest);
+
+    UserAvatarResponse uploadUserAvatar(Long userId, MultipartFile file);
+
+    UserResponse updateProfile(Long userId, UserDTO userDTO);
 
     Page<UserResponse> searchAndFilterUsers(UserSearchFilterDTO searchFilter);
 

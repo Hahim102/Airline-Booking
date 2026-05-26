@@ -10,6 +10,14 @@ spring:
     username: airline_user_db
     password: 123456
     driver-class-name: oracle.jdbc.OracleDriver
+minio:
+  enabled: true
+  endpoint: http://localhost:9000
+  access-key: admin
+  secret-key: 12345678
+  bucket: avatars
+  presign-expiration: 7 #day
+
 eureka:
   instance:
     prefer-ip-address: true
