@@ -24,8 +24,6 @@ public class MinioConfig {
     @Value("${minio.secret-key}")
     private String secretKey;
 
-    private final Logger logger = LoggerFactory.getLogger(MinioConfig.class);
-
     @Bean
     public MinioClient minioClient() {
         return MinioClient.builder()

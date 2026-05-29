@@ -6,7 +6,8 @@ import com.example.payload.response.AuthResponse;
 public interface AuthService {
 
     AuthResponse login(String email, String password);
-    AuthResponse register(UserDTO request);
+    void register(UserDTO request);
+    void resendOtp(String email);
     void logout(String accessToken, String refreshToken);
     AuthResponse updateProfile(Long id, UserDTO userDTO);
     AuthResponse refresh(String refreshToken);

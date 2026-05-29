@@ -28,7 +28,10 @@ public class JwtAuthenticationFilter implements GlobalFilter {
         List<String> publicEndpoints = List.of(
                 "/api/auth/login",
                 "/api/auth/register",
-                "/api/auth/refresh"
+                "/api/auth/refresh",
+                "/api/auth/verify-otp",
+                "/api/auth/resend-verify-otp"
+
         );
 
         if (publicEndpoints.contains(path)) {

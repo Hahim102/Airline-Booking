@@ -76,12 +76,22 @@ public class UserServiceImpl implements UserService {
         return mapToUserResponse(users);
     }
 
+    /*
+    - find user
+    - return
+     */
     @Override
     public List<UserResponse> getAllUsers() {
         List<Users> users = userRepository.findAll();
         return mapToUserResponseList(users);
     }
 
+    /*
+    - check user exist
+    - check role user
+    - set new active status
+    - set update time
+     */
     @Override
     public void updateIsActiveStatus(Long userId, boolean isActive) {
         Users user = userRepository.findByIdAndDeletedIsFalse(userId)
@@ -97,6 +107,12 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
     }
 
+    /*
+    - check user exist
+    - check role user
+    - set delete status
+    - save
+     */
     @Override
     public void deleteUser(Long userId) {
         Users user = userRepository.findByIdAndDeletedIsFalse(userId)
@@ -112,6 +128,12 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
     }
 
+    /*
+    - check email exits
+    - Set user info
+    - save user
+    - set pass default
+     */
     @Override
     public CreateUserResponse createUser(CreateUserByAdminDTO request) {
         if(userRepository.existsByEmail(request.getEmail())) {
@@ -136,6 +158,12 @@ public class UserServiceImpl implements UserService {
         return response;
     }
 
+    /*
+    - find user deleted is false
+    - check role user
+    - update info
+    - save user
+     */
     @Transactional
     @Override
     public UserResponse updateUserProfile(Long userId, UpdateUserProfileDTO updateRequest) {
@@ -165,30 +193,49 @@ public class UserServiceImpl implements UserService {
         return mapToUserResponse(users);
     }
 
+    /*
+    - find user by id
+    - get old object name of avatar
+    - create new object name
+    - put new object name
+    - set object name to user
+    - save user
+    - return url for frontend
+    - note if save object name to db false -> delete object name in minio
+     */
+    @Transactional
     @Override
     public UserAvatarResponse uploadUserAvatar(Long userId, MultipartFile file) {
         Users user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-         String oldObjectName = user.getAvatarObjectName();
+        String oldObjectName = user.getAvatarObjectName();
 
-         String objectName = minioStorageService.uploadObject(userId, file);
+        String objectName = null;
+        try {
+            objectName = minioStorageService.uploadObject(userId, file);
 
-         user.setAvatarObjectName(objectName);
+            user.setAvatarObjectName(objectName);
 
-         userRepository.save(user);
+            userRepository.save(user);
 
-         if (oldObjectName != null) {
-             minioStorageService.deleteObject(oldObjectName);
-         }
+            if (oldObjectName != null) {
+                minioStorageService.deleteObject(oldObjectName);
+            }
+        } catch (Exception e) {
+            if (objectName != null) {
+                minioStorageService.deleteObject(objectName);
+            }
+            throw new AppException(ErrorCode.UPLOAD_FAILED);
+        }
 
-         UserAvatarResponse response = ModelMapperUtil.mapper(user, UserAvatarResponse.class);
+        UserAvatarResponse response = ModelMapperUtil.mapper(user, UserAvatarResponse.class);
 
         response.setAvatarUrl(
                 minioStorageService.getPresignedUrl(objectName)
         );
 
-         return response;
+        return response;
     }
 
     @Override
@@ -211,6 +258,7 @@ public class UserServiceImpl implements UserService {
 
         return mapToUserResponse(updatedUser);
     }
+
 
     @Override
     public Page<UserResponse> searchAndFilterUsers(UserSearchFilterDTO searchFilter) {

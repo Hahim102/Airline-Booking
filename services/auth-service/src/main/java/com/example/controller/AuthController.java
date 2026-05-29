@@ -38,15 +38,21 @@ public class AuthController {
         if (captchaResponse == null || !captchaResponse.isSuccess()) {
             throw new AppException(ErrorCode.CAPTCHA_INVALID);
         }
-
-        AuthResponse result = authService.register(userDTO);
-
+        authService.register(userDTO);
         return ResponseUtils.success(
                 SuccessCode.USER_REGISTERED,
-                result
+                null
         );
     }
 
+    @PostMapping("/resend-verify-otp")
+    public ResponseEntity<ApiResponse<Void>> resendVerifyOtp(
+            @RequestBody ResendOtpDTO request
+    ) {
+        authService.resendOtp(request.getEmail());
+
+        return ResponseUtils.success(SuccessCode.OTP_SENT_SUCCESS, null);
+    }
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@RequestBody @Valid LoginRequestDTO request,

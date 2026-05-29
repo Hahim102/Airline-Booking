@@ -29,6 +29,7 @@ import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.logging.Logger;
 
 
 @Service
@@ -43,6 +44,7 @@ public class AuthServiceImpl implements AuthService {
     private final RedisTokenService redisTokenService;
     private final KafkaProducerService kafkaProducerService;
     private final RedisOtpService redisOtpService;
+    private final Logger logger = Logger.getLogger(AuthServiceImpl.class.getName());
 
 
     /*
@@ -54,37 +56,49 @@ public class AuthServiceImpl implements AuthService {
     */
 
 
+    @Transactional
     @Override
-    public AuthResponse register(UserDTO request) {
+    public void register(UserDTO request) {
         boolean existsUser = userRepository.existsByEmail(request.getEmail());
         if (existsUser) {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
+        Users savedUser;
+        try {
+            Users newUsers = Users.builder()
+                    .email(request.getEmail())
+                    .password(passwordEncoder.encode(request.getPassword()))
+                    .phone(request.getPhone())
+                    .role(UserRole.ROLE_USER)
+                    .active(false)
+                    .deleted(false)
+                    .fullName(request.getFullName())
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
+            savedUser = userRepository.save(newUsers);
 
-        Users newUsers = Users.builder()
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .phone(request.getPhone())
-                .role(UserRole.ROLE_USER)
-                .active(false)
-                .deleted(false)
-                .fullName(request.getFullName())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .lastLoginAt(LocalDateTime.now())
-                .build();
-        Users savedUsers = userRepository.save(newUsers);
-
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.USER_CREATE_FAILED);
+        }
         String otp = generateOtp();
 
-        redisOtpService.saveVerifyOtp(savedUsers.getEmail(), otp);
+        redisOtpService.saveVerifyOtp(savedUser.getEmail(), otp);
+
+        try {
+            redisOtpService.saveVerifyOtp(savedUser.getEmail(), otp);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.OTP_VERIFY_FAILED);
+        }
+
+        logger.info("OTP generated: " + otp);
 
         EmailEvent event = new EmailEvent(
-                savedUsers.getEmail(),
+                savedUser.getEmail(),
                 "Verify your Airline Booking account",
                 "VERIFY_OTP",
                 Map.of(
-                        "name", savedUsers.getFullName(),
+                        "name", savedUser.getFullName(),
                         "otp", otp
                 )
         );
@@ -95,9 +109,46 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
         }
 
-        AuthResponse authResponse = new AuthResponse();
-        authResponse.setUser(ModelMapperUtil.mapper(savedUsers, UserResponse.class));
-        return authResponse;
+    }
+
+    @Override
+    public void resendOtp(String email) {
+        Users user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (user.isActive()) {
+            throw new AppException(ErrorCode.USER_ALREADY_VERIFIED);
+        }
+
+        String otp = generateOtp();
+
+        redisOtpService.saveVerifyOtp(email, otp);
+
+        try {
+            redisOtpService.saveVerifyOtp(email, otp);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.OTP_VERIFY_FAILED);
+        }
+
+        logger.info("OTP generated: " + otp);
+
+        EmailEvent event = new EmailEvent(
+                email,
+                "Verify your Airline Booking account",
+                "VERIFY_OTP",
+                Map.of(
+                        "name", email,
+                        "otp", otp
+                )
+        );
+
+        try {
+            kafkaProducerService.sendEmailEvent(event);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
+        }
+
     }
 
     /*

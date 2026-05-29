@@ -30,6 +30,7 @@ public enum ErrorCode {
     FILE_NOT_FOUND(400, "File not found"),
     FILE_TOO_LARGE(400, "File size exceeds the limit"),
     UNSUPPORTED_FILE_TYPE(400, "Unsupported file type, Only JPG, PNG, WEBP are allowed"),
+    USER_CREATE_FAILED(400, "User creation failed"),
 
     
     // 401 UNAUTHORIZED

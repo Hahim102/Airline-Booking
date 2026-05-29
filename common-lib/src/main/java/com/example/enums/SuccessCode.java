@@ -22,6 +22,7 @@ public enum SuccessCode {
     OTP_VERIFIED(200, "OTP verified successfully"),
     EMAIL_SENT_SUCCESS(200, "Email sent successfully"),
     CONFIRM_RESET_PASSWORD_SUCCESS(200,  "OTP verified successfully. You can now reset your password."),
+    OTP_SENT_SUCCESS(200, "OTP sent successfully"),
 
     // 201 CREATED
 
