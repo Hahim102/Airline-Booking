@@ -23,10 +23,10 @@ public class HeaderAuthenticationFilter extends OncePerRequestFilter {
             HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain
-    ) throws ServletException, IOException {
+        ) throws ServletException, IOException {
 
-        String email = request.getHeader("X-User-Email");
-        String rolesHeader = request.getHeader("X-User-Roles");
+            String email = request.getHeader("X-User-Email");
+            String rolesHeader = request.getHeader("X-User-Roles");
 
         if (email != null) {
 

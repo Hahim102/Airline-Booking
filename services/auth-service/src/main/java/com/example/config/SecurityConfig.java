@@ -37,7 +37,11 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/verify-otp", "/api/auth/resend-verify-otp").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/register",
+                                "/api/auth/refresh", "/api/auth/verify-otp",
+                                "/api/auth/resend-verify-otp","/api/auth/forgot-password",
+                                "/api/auth/confirm-reset-password", "/api/auth/reset-password",
+                                "/api/auth/resend-forgot-password-otp").permitAll()
                         .anyRequest().authenticated()
 
                 );
@@ -45,21 +49,10 @@ public class SecurityConfig {
     }
 
 
-
-    @Bean
-    JwtDecoder jwtDecoder() {
-        SecretKeySpec secretKeySpec = new SecretKeySpec(JWT_SECRET.getBytes(), "HS512");
-        return NimbusJwtDecoder.
-                withSecretKey(secretKeySpec)
-                .macAlgorithm(MacAlgorithm.HS512)
-                .build();
-    }
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
     }
-
-
 
     @Bean
     public PasswordEncoder passwordEncoder() {

@@ -15,6 +15,7 @@ public interface AuthService {
     void verifyOtp(VerifyOtpDTO request);
 
     void forgotPassword(ForgotPasswordDTO request);
+    void resendForgotOtp(String email);
     
     void confirmResetPassword(VerifyOtpDTO request);
 

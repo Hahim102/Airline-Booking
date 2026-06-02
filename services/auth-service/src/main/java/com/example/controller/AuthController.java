@@ -45,15 +45,6 @@ public class AuthController {
         );
     }
 
-    @PostMapping("/resend-verify-otp")
-    public ResponseEntity<ApiResponse<Void>> resendVerifyOtp(
-            @RequestBody ResendOtpDTO request
-    ) {
-        authService.resendOtp(request.getEmail());
-
-        return ResponseUtils.success(SuccessCode.OTP_SENT_SUCCESS, null);
-    }
-
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@RequestBody @Valid LoginRequestDTO request,
                                                            HttpServletResponse response) {
@@ -155,6 +146,16 @@ public class AuthController {
                 null
         );
     }
+
+    @PostMapping("/resend-verify-otp")
+    public ResponseEntity<ApiResponse<Void>> resendVerifyOtp(
+            @RequestBody ResendOtpDTO request
+    ) {
+        authService.resendOtp(request.getEmail());
+
+        return ResponseUtils.success(SuccessCode.OTP_SENT_SUCCESS, null);
+    }
+
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(
             @RequestBody @Valid ForgotPasswordDTO request
@@ -164,6 +165,14 @@ public class AuthController {
                 SuccessCode.EMAIL_SENT_SUCCESS,
                 null
         );
+    }
+    @PostMapping("/resend-forgot-password-otp")
+    public ResponseEntity<ApiResponse<Void>> resendForgotPasswordOtp(
+            @RequestBody ResendOtpDTO request
+    ) {
+        authService.resendForgotOtp(request.getEmail());
+
+        return ResponseUtils.success(SuccessCode.OTP_SENT_SUCCESS, null);
     }
 
     @PostMapping("/confirm-reset-password")

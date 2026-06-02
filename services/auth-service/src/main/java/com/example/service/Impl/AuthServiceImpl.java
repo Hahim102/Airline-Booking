@@ -83,12 +83,10 @@ public class AuthServiceImpl implements AuthService {
         }
         String otp = generateOtp();
 
-        redisOtpService.saveVerifyOtp(savedUser.getEmail(), otp);
-
         try {
             redisOtpService.saveVerifyOtp(savedUser.getEmail(), otp);
         } catch (Exception e) {
-            throw new AppException(ErrorCode.OTP_VERIFY_FAILED);
+            throw new AppException(ErrorCode.OTP_SAVE_FAILED);
         }
 
         logger.info("OTP generated: " + otp);
@@ -111,45 +109,6 @@ public class AuthServiceImpl implements AuthService {
 
     }
 
-    @Override
-    public void resendOtp(String email) {
-        Users user = userRepository.findByEmail(email);
-        if (user == null) {
-            throw new AppException(ErrorCode.USER_NOT_FOUND);
-        }
-        if (user.isActive()) {
-            throw new AppException(ErrorCode.USER_ALREADY_VERIFIED);
-        }
-
-        String otp = generateOtp();
-
-        redisOtpService.saveVerifyOtp(email, otp);
-
-        try {
-            redisOtpService.saveVerifyOtp(email, otp);
-        } catch (Exception e) {
-            throw new AppException(ErrorCode.OTP_VERIFY_FAILED);
-        }
-
-        logger.info("OTP generated: " + otp);
-
-        EmailEvent event = new EmailEvent(
-                email,
-                "Verify your Airline Booking account",
-                "VERIFY_OTP",
-                Map.of(
-                        "name", email,
-                        "otp", otp
-                )
-        );
-
-        try {
-            kafkaProducerService.sendEmailEvent(event);
-        } catch (Exception e) {
-            throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
-        }
-
-    }
 
     /*
     1. Load user by email
@@ -163,7 +122,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse login(String email, String password) {
         Users users = userRepository
-                .findByEmailAndDeletedIsFalseAndActiveIsTrue(email)
+                .findByEmailAndDeletedIsFalse(email)
                 .orElseThrow(() ->
                         new AppException(ErrorCode.AUTHENTICATION_FAILED));
 
@@ -483,6 +442,44 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public void resendOtp(String email) {
+        Users user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (user.isActive()) {
+            throw new AppException(ErrorCode.USER_ALREADY_VERIFIED);
+        }
+
+        String otp = generateOtp();
+
+        try {
+            redisOtpService.saveVerifyOtp(email, otp);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.OTP_SAVE_FAILED);
+        }
+
+        logger.info("OTP generated: " + otp);
+
+        EmailEvent event = new EmailEvent(
+                email,
+                "Verify your Airline Booking account",
+                "VERIFY_OTP",
+                Map.of(
+                        "name", email,
+                        "otp", otp
+                )
+        );
+
+        try {
+            kafkaProducerService.sendEmailEvent(event);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
+        }
+
+    }
+
+    @Override
     public void forgotPassword(ForgotPasswordDTO request) {
         Users user = userRepository
                 .findByEmailAndDeletedIsFalseAndActiveIsTrue(
@@ -492,10 +489,11 @@ public class AuthServiceImpl implements AuthService {
 
         String otp = generateOtp();
 
-        redisOtpService.saveResetPasswordOtp(
-                user.getEmail(),
-                otp
-        );
+        try {
+            redisOtpService.saveResetPasswordOtp(user.getEmail(), otp);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.OTP_SAVE_FAILED);
+        }
 
         EmailEvent event = new EmailEvent(
                 user.getEmail(),
@@ -513,6 +511,45 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
         }
     }
+
+    @Override
+    public void resendForgotOtp(String email) {
+        Users user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
+        if (!user.isActive()) {
+            throw new AppException(ErrorCode.USER_DISABLED);
+        }
+
+        String otp = generateOtp();
+
+        try {
+            redisOtpService.saveResetPasswordOtp(email, otp);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.OTP_SAVE_FAILED);
+        }
+
+        logger.info("OTP generated: " + otp);
+
+        EmailEvent event = new EmailEvent(
+                user.getEmail(),
+                "Reset your Airline Booking password",
+                "RESET_PASSWORD_OTP",
+                Map.of(
+                        "name", user.getFullName(),
+                        "otp", otp
+                )
+        );
+
+        try {
+            kafkaProducerService.sendEmailEvent(event);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
+        }
+
+    }
+
 
     @Override
     public void confirmResetPassword(VerifyOtpDTO request) {
