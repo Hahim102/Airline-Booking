@@ -1,0 +1,159 @@
+services:
+
+  eureka-server:
+    image: eureka-server-test
+    container_name: eureka-server
+
+    ports:
+      - "8070:8070"
+
+  redis:
+    image: redis:7.2.4
+    container_name: airline-prod-redis
+
+    command: redis-server --appendonly yes
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_prod_data:/data
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: airline-prod-zookeeper
+
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: airline-prod-kafka
+
+    depends_on:
+      - zookeeper
+
+    ports:
+      - "9092:9092"
+
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  minio:
+    image: minio/minio
+    container_name: airline-prod-minio
+
+    command: server /data --console-address ":9001"
+
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: 12345678
+
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+    volumes:
+      - minio_prod_data:/data
+
+  api-gateway:
+    image: api-gateway-test
+    container_name: api-gateway
+
+    depends_on:
+      - eureka-server
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  auth-service:
+    image: auth-service-test
+    container_name: auth-service
+    env_file:
+      - .env
+
+    depends_on:
+      - eureka-server
+      - redis
+      - kafka
+
+    ports:
+      - "5002:5002"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  user-service:
+    image: user-service-test
+    container_name: user-service
+    env_file:
+      - .env
+
+    depends_on:
+      - eureka-server
+      - minio
+
+    ports:
+      - "5001:5001"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  notification-service:
+    image: notification-service-test
+    container_name: notification-service
+    env_file:
+      - .env
+
+    depends_on:
+      - eureka-server
+      - kafka
+
+    ports:
+      - "5003:5003"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  analytics-service:
+    image: analytics-service-test
+    container_name: analytics-service
+    env_file:
+      - .env
+
+    depends_on:
+      - eureka-server
+
+    ports:
+      - "5004:5004"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  report-service:
+    image: report-service-test
+    container_name: report-service
+    env_file:
+      - .env
+
+    depends_on:
+      - eureka-server
+
+    ports:
+      - "5005:5005"
+
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+volumes:
+  redis_prod_data:
+  minio_prod_data:

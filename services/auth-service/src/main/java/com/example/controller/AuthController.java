@@ -5,10 +5,7 @@ import com.example.enums.ErrorCode;
 import com.example.enums.SuccessCode;
 import com.example.exception.AppException;
 import com.example.payload.dto.*;
-import com.example.payload.response.ApiResponse;
-import com.example.payload.response.AuthResponse;
-import com.example.payload.response.RecaptchaResponse;
-import com.example.payload.response.ResponseUtils;
+import com.example.payload.response.*;
 import com.example.service.AuthService;
 import com.example.service.Impl.RecaptchaService;
 import com.example.util.CookieUtils;
@@ -43,6 +40,13 @@ public class AuthController {
                 SuccessCode.USER_REGISTERED,
                 null
         );
+    }
+        @PostMapping("/admin/create-user")
+    public ResponseEntity<ApiResponse<CreateUserResponse>> createUserByAdmin(
+            @RequestBody @Valid CreateUserByAdminDTO request
+    ) {
+        CreateUserResponse createdUser = authService.createUserByAdmin(request);
+        return ResponseUtils.success(SuccessCode.USER_CREATED, createdUser);
     }
 
     @PostMapping("/login")
@@ -115,15 +119,6 @@ public class AuthController {
         authResponse.setUser(result.getUser());
         return ResponseUtils.success(
                 SuccessCode.REFRESH_TOKEN_SUCCESS,
-                authResponse
-        );
-    }
-
-    @PutMapping("/update-profile")
-    public ResponseEntity<ApiResponse<AuthResponse>> updateProfile(@RequestParam Long userId, @RequestBody @Valid UserDTO userDTO) {
-        AuthResponse authResponse = authService.updateProfile(userId, userDTO);
-        return ResponseUtils.success(
-                SuccessCode.PROFILE_UPDATED,
                 authResponse
         );
     }

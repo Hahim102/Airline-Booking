@@ -20,8 +20,6 @@ public interface UserService {
     void updateIsActiveStatus(Long userId, boolean isActive);
     void deleteUser(Long userId);
 
-    CreateUserResponse createUser(CreateUserByAdminDTO request);
-
     UserResponse updateUserProfile(Long userId, UpdateUserProfileDTO updateRequest);
 
     UserAvatarResponse uploadUserAvatar(Long userId, MultipartFile file);

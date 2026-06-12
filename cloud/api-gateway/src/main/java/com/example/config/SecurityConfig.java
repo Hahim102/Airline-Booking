@@ -34,14 +34,10 @@ public class SecurityConfig {
                     config.setAllowCredentials(true);
                     return config;
                 }))
-
                 .authorizeExchange(ex -> ex
                         .pathMatchers(HttpMethod.OPTIONS).permitAll()
                         .anyExchange().permitAll()
                 )
-
-
-
                 .build();
 
     }

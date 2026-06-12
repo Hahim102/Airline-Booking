@@ -16,12 +16,11 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<Users, Long>, JpaSpecificationExecutor<Users> {
 
-
-    Optional<Users> findByEmailAndActiveIsFalse(String email);
-
     Optional<Users> findByIdAndDeletedIsFalseAndActiveIsTrue(Long userId);
 
     Optional<Users> findByEmailAndDeletedIsFalseAndActiveIsTrue(String email);
+
+    Optional<Users> findByEmailAndDeletedIsFalse(String email);
 
     boolean existsByEmail(String email);
 
@@ -30,7 +29,7 @@ public interface UserRepository extends JpaRepository<Users, Long>, JpaSpecifica
     Users findByEmail(String email);
 
 //    @Modifying
-//    @Query(value = "Update users set phone = ?3, fullName = ?4 where id = ?5", nativeQuery = true)
+//    @Query(value = "Update authUser set phone = ?3, fullName = ?4 where id = ?5", nativeQuery = true)
 //    UserResponse updateUser(String phone, String fullName, Long id);
 
     long count();
@@ -42,7 +41,7 @@ public interface UserRepository extends JpaRepository<Users, Long>, JpaSpecifica
     @Query(value = """
         SELECT TO_CHAR(u.created_at, 'YYYY-MM-DD') AS label,
                COUNT(*) AS total
-        FROM users u
+        FROM authUser u
         GROUP BY TO_CHAR(u.created_at, 'YYYY-MM-DD')
         ORDER BY label
         """, nativeQuery = true)
@@ -52,7 +51,7 @@ public interface UserRepository extends JpaRepository<Users, Long>, JpaSpecifica
     @Query(value = """
         SELECT TO_CHAR(u.created_at, 'IYYY-IW') AS label,
                COUNT(*) AS total
-        FROM users u
+        FROM authUser u
         GROUP BY TO_CHAR(u.created_at, 'IYYY-IW')
         ORDER BY label
         """, nativeQuery = true)
@@ -62,10 +61,19 @@ public interface UserRepository extends JpaRepository<Users, Long>, JpaSpecifica
     @Query(value = """
         SELECT TO_CHAR(u.created_at, 'YYYY-MM') AS label,
                COUNT(*) AS total
-        FROM users u
+        FROM authUser u
         GROUP BY TO_CHAR(u.created_at, 'YYYY-MM')
         ORDER BY label
         """, nativeQuery = true)
     List<Object[]> countUsersByMonth();
+
+    @Query(value = """
+        SELECT TO_CHAR(u.created_at, 'yyyy-mm-dd') as label,
+                count(*) as total
+        from authUser u
+        where u.created_at >= systimestamp - numtodinterval(:days, 'DAY')
+        group by TO_CHAR(u.created_at, 'yyyy-mm-dd')
+        order by label""", nativeQuery = true)
+    List<Object[]> countUsersLastNDays();
 
 }

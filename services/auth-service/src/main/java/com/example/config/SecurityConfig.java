@@ -42,6 +42,7 @@ public class SecurityConfig {
                                 "/api/auth/resend-verify-otp","/api/auth/forgot-password",
                                 "/api/auth/confirm-reset-password", "/api/auth/reset-password",
                                 "/api/auth/resend-forgot-password-otp").permitAll()
+                        .requestMatchers("/api/auth/admin/create-user").hasRole("SYSTEM_ADMIN")
                         .anyRequest().authenticated()
 
                 );

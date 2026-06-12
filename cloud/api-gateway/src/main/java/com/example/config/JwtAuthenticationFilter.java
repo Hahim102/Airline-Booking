@@ -30,7 +30,11 @@ public class JwtAuthenticationFilter implements GlobalFilter {
                 "/api/auth/register",
                 "/api/auth/refresh",
                 "/api/auth/verify-otp",
-                "/api/auth/resend-verify-otp"
+                "/api/auth/resend-verify-otp",
+                "/api/auth/forgot-password",
+                "/api/auth/confirm-reset-password",
+                "/api/auth/reset-password",
+                "/api/auth/resend-forgot-password-otp"
 
         );
 
@@ -73,6 +77,8 @@ public class JwtAuthenticationFilter implements GlobalFilter {
                     String email =
                             JwtUtils.extractEmail(token);
 
+
+                    //Create new request to service
                     ServerHttpRequest request = exchange
                             .getRequest()
                             .mutate()
@@ -104,5 +110,4 @@ public class JwtAuthenticationFilter implements GlobalFilter {
          exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
          return exchange.getResponse().setComplete();
     }
-
 }

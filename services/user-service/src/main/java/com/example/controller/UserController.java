@@ -51,7 +51,7 @@ public class UserController {
         return ResponseUtils.success(SuccessCode.SUCCESS, user);
     }
 
-    @GetMapping()
+    @GetMapping("/get-all")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsers() {
         List<UserResponse> users = userService.getAllUsers();
         return ResponseUtils.success(
@@ -82,11 +82,6 @@ public class UserController {
         return ResponseUtils.success(SuccessCode.PROFILE_UPDATED, updatedUser);
     }
 
-    @PostMapping("/create-user")
-    public ResponseEntity<ApiResponse<CreateUserResponse>> createUser(@RequestBody CreateUserByAdminDTO request) {
-        CreateUserResponse createdUser = userService.createUser(request);
-        return ResponseUtils.success(SuccessCode.USER_CREATED, createdUser);
-    }
 
     @GetMapping("/export-data")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsersForExport() {
@@ -166,15 +161,15 @@ public class UserController {
                 avatarResponse);
     }
 
-    @PutMapping("/me/update-profile")
+    @PutMapping("me/update-profile")
     public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @AuthenticationPrincipal
             UserPrincipal principal,
             @RequestBody @Valid UserDTO userDTO
     ) {
-        UserResponse updateMyProfile = userService.updateProfile(principal.getId(), userDTO);
+        UserResponse updateUserProfile = userService.updateProfile(principal.getId(), userDTO);
 
-        return ResponseUtils.success(SuccessCode.PROFILE_UPDATED, updateMyProfile);
+        return ResponseUtils.success(SuccessCode.PROFILE_UPDATED, updateUserProfile);
     }
 
 }

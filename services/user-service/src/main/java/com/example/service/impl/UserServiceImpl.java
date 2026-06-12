@@ -3,6 +3,7 @@ package com.example.service.impl;
 import com.example.enums.ErrorCode;
 import com.example.enums.StatisticType;
 import com.example.enums.UserRole;
+import com.example.event.UserUpdatedEvent;
 import com.example.exception.AppException;
 import com.example.model.Users;
 import com.example.payload.dto.CreateUserByAdminDTO;
@@ -12,7 +13,6 @@ import com.example.payload.dto.UserSearchFilterDTO;
 import com.example.payload.response.*;
 import com.example.repository.UserRepository;
 import com.example.repository.specification.UserSpecification;
-import com.example.service.MinioStorageService;
 import com.example.service.UserService;
 import com.example.util.ModelMapperUtil;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
 )
 public class UserServiceImpl implements UserService {
 
+    private final KafkaProducerService kafkaProducerService;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private static final String DEFAULT_PASSWORD = "Admin@123";
@@ -47,7 +48,15 @@ public class UserServiceImpl implements UserService {
     private UserResponse mapToUserResponse(Users user) {
         UserResponse response = ModelMapperUtil.mapper(user, UserResponse.class);
         if (user.getAvatarObjectName() != null && !user.getAvatarObjectName().isBlank()) {
-            response.setAvatarUrl(minioStorageService.getPresignedUrl(user.getAvatarObjectName()));
+            try {
+                response.setAvatarUrl(
+                        minioStorageService.getPresignedUrl(user.getAvatarObjectName())
+                );
+            } catch (Exception e) {
+                response.setAvatarUrl(null);
+            }
+        } else {
+            response.setAvatarUrl(null);
         }
         return response;
     }
@@ -128,35 +137,6 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
     }
 
-    /*
-    - check email exits
-    - Set user info
-    - save user
-    - set pass default
-     */
-    @Override
-    public CreateUserResponse createUser(CreateUserByAdminDTO request) {
-        if(userRepository.existsByEmail(request.getEmail())) {
-            throw new AppException(ErrorCode.EMAIL_ALREADY_USED);
-        }
-
-        Users newUser = Users.builder()
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(DEFAULT_PASSWORD))
-                .phone(request.getPhone())
-                .role(request.getRole())
-                .active(true)
-                .deleted(false)
-                .fullName(request.getFullName())
-                .createdAt(LocalDateTime.now())
-                .build();
-        Users savedUser = userRepository.save(newUser);
-
-        CreateUserResponse response = ModelMapperUtil.mapper(savedUser, CreateUserResponse.class);
-
-        response.setPassword(DEFAULT_PASSWORD);
-        return response;
-    }
 
     /*
     - find user deleted is false
@@ -189,6 +169,8 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedAt(LocalDateTime.now());
 
         Users users = userRepository.save(user);
+
+        publishUserUpdatedEvent(users);
 
         return mapToUserResponse(users);
     }
@@ -256,7 +238,21 @@ public class UserServiceImpl implements UserService {
 
         Users updatedUser = userRepository.save(user);
 
+        publishUserUpdatedEvent(updatedUser);
+
         return mapToUserResponse(updatedUser);
+    }
+
+    private void publishUserUpdatedEvent(Users user) {
+        UserUpdatedEvent event = UserUpdatedEvent.builder()
+                .userId(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .phone(user.getPhone())
+                .updatedAt(user.getUpdatedAt())
+                .build();
+
+        kafkaProducerService.sendUserUpdatedEvent(event);
     }
 
 

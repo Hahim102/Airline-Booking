@@ -1,0 +1,23 @@
+server:
+  port: 5004
+
+spring:
+  application:
+    name: ANALYTICS-SERVICE
+
+  datasource:
+    url: jdbc:oracle:thin:@host.docker.internal:1521/ORCL21PDB1
+    username: airline_report_db
+    password: ${ANALYTICS_DB_PASSWORD}
+    driver-class-name: oracle.jdbc.OracleDriver
+
+eureka:
+  instance:
+    prefer-ip-address: false
+    hostname: analytics-service
+
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: http://eureka-server:8070/eureka/

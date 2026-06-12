@@ -1,4 +1,4 @@
-package com.example.service;
+package com.example.service.impl;
 
 import com.example.enums.ErrorCode;
 import com.example.exception.AppException;

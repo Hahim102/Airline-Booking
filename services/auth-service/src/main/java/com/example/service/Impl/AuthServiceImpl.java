@@ -4,17 +4,18 @@ import com.example.config.JwtProvider;
 import com.example.enums.ErrorCode;
 import com.example.enums.UserRole;
 import com.example.event.EmailEvent;
+import com.example.event.UserRegisteredEvent;
 import com.example.exception.AppException;
 import com.example.jwt.JwtUtils;
-import com.example.model.Users;
+import com.example.model.AuthUser;
 import com.example.payload.dto.*;
 import com.example.payload.response.AuthResponse;
-import com.example.payload.response.UserResponse;
-import com.example.repository.UserRepository;
+import com.example.payload.response.AuthUserResponse;
+import com.example.payload.response.CreateUserResponse;
+import com.example.repository.AuthUserRepository;
 import com.example.service.AuthService;
 import com.example.service.RedisOtpService;
 import com.example.service.RedisTokenService;
-import com.example.service.UserDetailService;
 import com.example.util.ModelMapperUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -36,15 +37,17 @@ import java.util.logging.Logger;
 @Transactional
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
-    private final UserRepository userRepository;
+    private final AuthUserRepository authUserRepository;
     private final PasswordEncoder passwordEncoder;
-    private final UserDetailService userDetailService;
+    private final AuthUserDetailService authUserDetailService;
     private final JwtProvider jwtProvider;
     private final AuthenticationManager authenticationManager;
     private final RedisTokenService redisTokenService;
     private final KafkaProducerService kafkaProducerService;
     private final RedisOtpService redisOtpService;
     private final Logger logger = Logger.getLogger(AuthServiceImpl.class.getName());
+
+    private static final String DEFAULT_PASSWORD = "Admin@123";
 
 
     /*
@@ -59,24 +62,23 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     @Override
     public void register(UserDTO request) {
-        boolean existsUser = userRepository.existsByEmail(request.getEmail());
+        boolean existsUser = authUserRepository.existsByEmail(request.getEmail());
         if (existsUser) {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
-        Users savedUser;
+        AuthUser savedUser;
         try {
-            Users newUsers = Users.builder()
+            AuthUser newAuthUser = AuthUser.builder()
                     .email(request.getEmail())
                     .password(passwordEncoder.encode(request.getPassword()))
                     .phone(request.getPhone())
+                    .fullName(request.getFullName())
                     .role(UserRole.ROLE_USER)
                     .active(false)
                     .deleted(false)
-                    .fullName(request.getFullName())
                     .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
                     .build();
-            savedUser = userRepository.save(newUsers);
+            savedUser = authUserRepository.save(newAuthUser);
 
         } catch (Exception e) {
             throw new AppException(ErrorCode.USER_CREATE_FAILED);
@@ -109,6 +111,44 @@ public class AuthServiceImpl implements AuthService {
 
     }
 
+    @Override
+    public CreateUserResponse createUserByAdmin(CreateUserByAdminDTO request) {
+        if (authUserRepository.existsByEmail(request.getEmail())) {
+            throw new AppException(ErrorCode.USER_EXISTED);
+        }
+
+        AuthUser authUser = AuthUser.builder()
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(DEFAULT_PASSWORD))
+                .fullName(request.getFullName())
+                .phone(request.getPhone())
+                .role(request.getRole())
+                .active(true)
+                .deleted(false)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        AuthUser savedUser = authUserRepository.save(authUser);
+
+        CreateUserResponse response = ModelMapperUtil.mapper(
+                savedUser, CreateUserResponse.class);
+
+        UserRegisteredEvent event = UserRegisteredEvent.builder()
+                .userId(savedUser.getId())
+                .email(savedUser.getEmail())
+                .fullName(savedUser.getFullName())
+                .phone(savedUser.getPhone())
+                .role(savedUser.getRole())
+                .active(savedUser.isActive())
+                .createdAt(savedUser.getCreatedAt())
+                .build();
+
+        kafkaProducerService.sendUserRegisteredEvent(event);
+
+        response.setPassword(DEFAULT_PASSWORD);
+        return response;
+    }
+
 
     /*
     1. Load user by email
@@ -121,12 +161,12 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(String email, String password) {
-        Users users = userRepository
+        AuthUser authUser = authUserRepository
                 .findByEmailAndDeletedIsFalse(email)
                 .orElseThrow(() ->
                         new AppException(ErrorCode.AUTHENTICATION_FAILED));
 
-        if (!users.isActive()) {
+        if (!authUser.isActive()) {
             throw new AppException(ErrorCode.USER_NOT_VERIFIED);
         }
 
@@ -134,26 +174,26 @@ public class AuthServiceImpl implements AuthService {
                 authenticate(new UsernamePasswordAuthenticationToken(email, password));
 
 
-        users.setLastLoginAt(LocalDateTime.now());
-        userRepository.save(users);
+        authUser.setLastLoginAt(LocalDateTime.now());
+        authUserRepository.save(authUser);
 
-        UserResponse userResponse = ModelMapperUtil.mapper(users, UserResponse.class);
+        AuthUserResponse authUserResponse = ModelMapperUtil.mapper(authUser, AuthUserResponse.class);
 
-        String accessToken = jwtProvider.generateAccessToken(authentication, users.getId());
-        String refreshToken = jwtProvider.generateRefreshToken(users.getId());
+        String accessToken = jwtProvider.generateAccessToken(authentication, authUser.getId());
+        String refreshToken = jwtProvider.generateRefreshToken(authUser.getId());
 
 
         redisTokenService.saveRefreshToken(
-                users.getId(),
+                authUser.getId(),
                 refreshToken,
                 jwtProvider.getRefreshExpiration()
         );
         EmailEvent event = new EmailEvent(
-                users.getEmail(),
+                authUser.getEmail(),
                 "Login Notification",
                 "LOGIN_SUCCESS",
                 Map.of(
-                        "name", users.getFullName(),
+                        "name", authUser.getFullName(),
                         "time", LocalDateTime.now().toString()
                 )
         );
@@ -168,32 +208,10 @@ public class AuthServiceImpl implements AuthService {
         AuthResponse authResponse = new AuthResponse();
         authResponse.setAccessToken(accessToken);
         authResponse.setRefreshToken(refreshToken);
-        authResponse.setUser(userResponse);
+        authResponse.setUser(authUserResponse);
         return authResponse;
     }
 
-    /*
-    @Override
-    public void logout(String accessToken, String refreshToken) {
-        try {
-            if (accessToken != null && JwtUtils.isTokenValid(accessToken)) {
-                BlacklistedToken blacklistedToken = BlacklistedToken.builder()
-                        .token(accessToken)
-                        .expiredAt(JwtUtils.extractAllClaims(accessToken).getExpiration())
-                        .build();
-
-                blacklistedTokenRepository.save(blacklistedToken);
-            }
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid access token");
-        }
-
-        if (refreshToken != null) {
-            refreshTokenRepository.deleteByToken(refreshToken);
-        }
-
-    }
-     */
     @Override
     public void logout(String accessToken, String refreshToken) {
 
@@ -232,58 +250,7 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    /*
-    public AuthResponse refresh(String refreshToken) {
-        if (refreshToken == null) {
-            throw new RuntimeException("Refresh token is null");
-        }
 
-        RefreshToken token = refreshTokenRepository.findByToken(refreshToken)
-                .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
-
-        if (token.getExpiryDate().before(new Date())) {
-            refreshTokenRepository.deleteById(token.getId());
-            throw new RuntimeException("Refresh token expired");
-        }
-
-        Users user = userRepository.findById(token.getUserId())
-                .filter(u -> u.isActive() && !u.isDeleted())
-                .orElseThrow(() -> new RuntimeException("User is inactive or deleted"));
-
-        refreshTokenRepository.deleteById(token.getId());
-
-
-        String newRefreshToken = jwtProvider.generateRefreshToken(user.getId());
-
-        refreshTokenRepository.save(
-                new RefreshToken(
-                        null,
-                        newRefreshToken,
-                        user.getId(),
-                        new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000)
-                )
-        );
-
-
-        UserDetails userDetails = userDetailService.loadUserByUsername(user.getEmail());
-
-        Authentication authentication =
-                new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities()
-                );
-        String newAccessToken = jwtProvider.generateAccessToken(authentication, user.getId());
-
-        AuthResponse res = new AuthResponse();
-        res.setAccessToken(newAccessToken);
-        res.setRefreshToken(newRefreshToken);
-        res.setUser(ModelMapperUtil.mapper(user, UserResponse.class));
-
-        return res;
-    }
-
-     */
     @Override
     public AuthResponse refresh(String refreshToken) {
 
@@ -322,7 +289,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
 
-        Users user = userRepository.findById(userId)
+        AuthUser user = authUserRepository.findById(userId)
                 .filter(u -> u.isActive() && !u.isDeleted())
                 .orElseThrow(() ->
                         new AppException(ErrorCode.USER_DISABLED));
@@ -339,7 +306,7 @@ public class AuthServiceImpl implements AuthService {
         );
 
         UserDetails userDetails =
-                userDetailService.loadUserByUsername(
+                authUserDetailService.loadUserByUsername(
                         user.getEmail()
                 );
 
@@ -363,7 +330,7 @@ public class AuthServiceImpl implements AuthService {
         res.setUser(
                 ModelMapperUtil.mapper(
                         user,
-                        UserResponse.class
+                        AuthUserResponse.class
                 )
         );
 
@@ -372,7 +339,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void updatePassword(Long userId, PasswordDTO passwordDTO) {
-        Users user = userRepository.findById(userId)
+        AuthUser user = authUserRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
         if (!passwordEncoder.matches(passwordDTO.getCurrentPassword(), user.getPassword())) {
             throw new AppException(ErrorCode.OLD_PASSWORD_INCORRECT);
@@ -385,33 +352,10 @@ public class AuthServiceImpl implements AuthService {
 
         user.setPassword(passwordEncoder.encode(passwordDTO.getNewPassword()));
         user.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(user);
+        authUserRepository.save(user);
     }
 
-    @Override
-    public AuthResponse updateProfile(Long id, UserDTO userDTO) {
-        Users user = userRepository.findByIdAndDeletedIsFalseAndActiveIsTrue(id)
-                .orElseThrow(() ->
-                        new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if (!user.getEmail().equals(userDTO.getEmail())
-                && userRepository.existsByEmail(userDTO.getEmail())) {
-            throw new AppException(ErrorCode.EMAIL_ALREADY_USED);
-        }
-
-        user.setFullName(userDTO.getFullName());
-        user.setEmail(userDTO.getEmail());
-        user.setPhone(userDTO.getPhone());
-        user.setUpdatedAt(LocalDateTime.now());
-
-        Users updatedUser = userRepository.save(user);
-
-        UserResponse userResponse = ModelMapperUtil.mapper(updatedUser, UserResponse.class);
-
-        AuthResponse authResponse = new AuthResponse();
-        authResponse.setUser(userResponse);
-        return authResponse;
-    }
     @Transactional
     public void verifyOtp(VerifyOtpDTO request) {
 
@@ -425,7 +369,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.OTP_INVALID);
         }
 
-        Users user = userRepository.findByEmail(request.getEmail());
+        AuthUser user = authUserRepository.findByEmail(request.getEmail());
         if (user == null) {
             throw new AppException(ErrorCode.USER_NOT_FOUND);
         }
@@ -436,14 +380,32 @@ public class AuthServiceImpl implements AuthService {
 
         user.setActive(true);
 
-        userRepository.save(user);
+        authUserRepository.save(user);
+
+        AuthUser savedUser = authUserRepository.save(user);
 
         redisOtpService.deleteVerifyOtp(request.getEmail());
+
+        UserRegisteredEvent event = UserRegisteredEvent.builder()
+                .userId(savedUser.getId())
+                .email(savedUser.getEmail())
+                .fullName(savedUser.getFullName())
+                .phone(savedUser.getPhone())
+                .role(savedUser.getRole())
+                .createdAt(savedUser.getCreatedAt())
+                .build();
+
+        try {
+            kafkaProducerService.sendUserRegisteredEvent(event);
+        } catch (Exception e) {
+            throw new AppException(ErrorCode.KAFKA_PUBLISH_FAILED);
+        }
+
     }
 
     @Override
     public void resendOtp(String email) {
-        Users user = userRepository.findByEmail(email);
+        AuthUser user = authUserRepository.findByEmail(email);
         if (user == null) {
             throw new AppException(ErrorCode.USER_NOT_FOUND);
         }
@@ -458,8 +420,6 @@ public class AuthServiceImpl implements AuthService {
         } catch (Exception e) {
             throw new AppException(ErrorCode.OTP_SAVE_FAILED);
         }
-
-        logger.info("OTP generated: " + otp);
 
         EmailEvent event = new EmailEvent(
                 email,
@@ -481,11 +441,14 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void forgotPassword(ForgotPasswordDTO request) {
-        Users user = userRepository
+        AuthUser user = authUserRepository
                 .findByEmailAndDeletedIsFalseAndActiveIsTrue(
                         request.getEmail())
                 .orElseThrow(() ->
                         new AppException(ErrorCode.USER_NOT_FOUND));
+        if (!user.isActive()) {
+            throw new AppException(ErrorCode.USER_DISABLED);
+        }
 
         String otp = generateOtp();
 
@@ -514,13 +477,8 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void resendForgotOtp(String email) {
-        Users user = userRepository.findByEmail(email);
-        if (user == null) {
-            throw new AppException(ErrorCode.USER_NOT_FOUND);
-        }
-        if (!user.isActive()) {
-            throw new AppException(ErrorCode.USER_DISABLED);
-        }
+        AuthUser user = authUserRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(email)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         String otp = generateOtp();
 
@@ -563,7 +521,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.OTP_INVALID);
         }
 
-        Users user = userRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(request.getEmail())
+        authUserRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(request.getEmail())
                 .orElseThrow(() ->
                         new AppException(ErrorCode.USER_NOT_FOUND));
 
@@ -572,24 +530,11 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void resetPassword(ResetPasswordDTO request) {
-        String redisOtp = redisOtpService.getResetPasswordOtp(
-                request.getEmail()
-        );
-
-        if (redisOtp == null) {
-            throw new AppException(ErrorCode.OTP_EXPIRED);
-        }
-
-        if (!redisOtp.equals(request.getOtp())) {
-            throw new AppException(ErrorCode.OTP_INVALID);
-        }
-
-
         if (!redisOtpService.isResetPasswordOtpVerified(request.getEmail())) {
             throw new AppException(ErrorCode.OTP_VERIFY_FAILED);
         }
 
-        Users user = userRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(
+        AuthUser user = authUserRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(
                 request.getEmail())
                 .orElseThrow(() ->
                         new AppException(ErrorCode.USER_NOT_FOUND));
@@ -601,7 +546,7 @@ public class AuthServiceImpl implements AuthService {
 
         user.setUpdatedAt(LocalDateTime.now());
 
-        userRepository.save(user);
+        authUserRepository.save(user);
 
         redisOtpService.deleteResetPasswordOtp(request.getEmail());
 

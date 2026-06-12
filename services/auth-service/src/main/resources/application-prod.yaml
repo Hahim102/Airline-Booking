@@ -1,48 +1,56 @@
 server:
-  port: 5001
+  port: 5002
 
 spring:
   application:
-    name: user-service
+    name: AUTH-SERVICE
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka:9092
 
     consumer:
       group-id: user-service-group
-
       auto-offset-reset: earliest
-
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-
       properties:
         spring.json.trusted.packages: "*"
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
+  data:
+    redis:
+      host: redis
+      port: 6379
+
   datasource:
-    url: jdbc:oracle:thin:@localhost:1521/ORCL21PDB1
-    username: airline_user_db
-    password: 123456
+    url: jdbc:oracle:thin:@host.docker.internal:1521/ORCL21PDB1
+    username: airline_auth_db
+    password: ${AUTH_DB_PASSWORD}
     driver-class-name: oracle.jdbc.OracleDriver
+
+recaptcha:
+  secret: ${RECAPTCHA_SECRET}
+  verify-url: https://www.google.com/recaptcha/api/siteverify
+
+app:
+  auth:
+    refresh-cookie:
+      secure: false
+      same-site: Lax
+
 minio:
-  enabled: true
-  endpoint: http://localhost:9000
-  access-key: admin
-  secret-key: 12345678
-  bucket: avatars
-  presign-expiration: 7 #day
+  enabled: false
 
 eureka:
   instance:
-    prefer-ip-address: true
+    prefer-ip-address: false
+    hostname: auth-service
+
   client:
     fetch-registry: true
     register-with-eureka: true
     service-url:
-      defaultZone: "http://localhost:8070/eureka/"
+      defaultZone: http://eureka-server:8070/eureka/

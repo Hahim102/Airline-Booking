@@ -1,0 +1,5 @@
+.idea
+*.iml
+src
+.git
+.gitignore

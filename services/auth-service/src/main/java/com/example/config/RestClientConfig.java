@@ -8,7 +8,7 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class RestClientConfig {
     @Bean
-    public RestClient restClient(RestClient.Builder builder) {
+    public RestClient restClient() {
         SimpleClientHttpRequestFactory factory =
                 new SimpleClientHttpRequestFactory();
 

@@ -14,16 +14,25 @@ public class RedisTokenServiceImpl
 
     private final RedisTemplate<String, Object> redisTemplate;
 
+    private static final String REFRESH_TOKEN_PREFIX = "auth:refresh:";
+    private static final String BLACKLIST_TOKEN_PREFIX = "auth:blacklist:";
+
+    private String buildRefreshTokenKey(Long userId) {
+        return REFRESH_TOKEN_PREFIX + userId;
+    }
+
+    private String buildBlacklistTokenKey(String accessToken) {
+        return BLACKLIST_TOKEN_PREFIX + accessToken;
+    }
+
     @Override
     public void saveRefreshToken(
             Long userId,
             String refreshToken,
-            long expiration) {
-
-        String key = "auth:refresh:" + userId;
-
+            long expiration
+    ) {
         redisTemplate.opsForValue().set(
-                key,
+                buildRefreshTokenKey(userId),
                 refreshToken,
                 Duration.ofMillis(expiration)
         );
@@ -31,32 +40,25 @@ public class RedisTokenServiceImpl
 
     @Override
     public String getRefreshToken(Long userId) {
-
-        String key = "auth:refresh:" + userId;
-
-        return (String) redisTemplate
+        Object value = redisTemplate
                 .opsForValue()
-                .get(key);
+                .get(buildRefreshTokenKey(userId));
+
+        return value == null ? null : value.toString();
     }
 
     @Override
     public void deleteRefreshToken(Long userId) {
-
-        String key = "auth:refresh:" + userId;
-
-        redisTemplate.delete(key);
+        redisTemplate.delete(buildRefreshTokenKey(userId));
     }
 
     @Override
     public void blacklistAccessToken(
             String accessToken,
-            long expiration) {
-
-        String key =
-                "auth:blacklist:" + accessToken;
-
+            long expiration
+    ) {
         redisTemplate.opsForValue().set(
-                key,
+                buildBlacklistTokenKey(accessToken),
                 "true",
                 Duration.ofMillis(expiration)
         );
@@ -64,12 +66,8 @@ public class RedisTokenServiceImpl
 
     @Override
     public boolean isBlacklisted(String token) {
-
-        String key =
-                "auth:blacklist:" + token;
-
         return Boolean.TRUE.equals(
-                redisTemplate.hasKey(key)
+                redisTemplate.hasKey(buildBlacklistTokenKey(token))
         );
     }
 }

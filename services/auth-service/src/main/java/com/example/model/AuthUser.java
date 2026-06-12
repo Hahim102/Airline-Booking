@@ -1,6 +1,5 @@
 package com.example.model;
 
-
 import com.example.enums.UserRole;
 import jakarta.persistence.*;
 import lombok.*;
@@ -13,19 +12,23 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Entity
-public class Users {
-
+public class AuthUser {
     @Id
+    @SequenceGenerator(name = "auth_user_seq", sequenceName = "AUTH_USER_SEQ", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "auth_user_seq")
     private Long id;
 
     @Column(unique = true, nullable = false)
     private String email;
 
     @Column(nullable = false)
-    private String fullName;
+    private String password;
 
     @Column(nullable = false)
     private String phone;
+
+    @Column(nullable = false)
+    private String fullName;
 
     @Column(nullable = false)
     private UserRole role;
@@ -36,11 +39,7 @@ public class Users {
     @Column(nullable = false)
     private boolean deleted;
 
-    @Column(nullable = true)
-    private String avatarObjectName;
-
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private LocalDateTime deletedAt;
     private LocalDateTime lastLoginAt;
 }

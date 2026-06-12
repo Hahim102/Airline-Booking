@@ -1,10 +1,10 @@
-package com.example.service;
+package com.example.service.Impl;
 
 
 import com.example.enums.ErrorCode;
 import com.example.exception.AppException;
-import com.example.model.Users;
-import com.example.repository.UserRepository;
+import com.example.model.AuthUser;
+import com.example.repository.AuthUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -18,14 +18,15 @@ import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
-public class UserDetailService implements UserDetailsService {
-    private final UserRepository userRepository;
+public class AuthUserDetailService implements UserDetailsService {
+    private final AuthUserRepository authUserRepository;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        Users users = userRepository.findByEmailAndDeletedIsFalseAndActiveIsTrue(email)
-                .orElseThrow(() ->
-                        new AppException(ErrorCode.USER_NOT_FOUND));
+        AuthUser users = authUserRepository.findByEmail(email);
+        if (users == null) {
+            throw new AppException(ErrorCode.USER_NOT_FOUND);
+        }
 
         GrantedAuthority grantedAuthority = new SimpleGrantedAuthority(users.getRole().toString());
         Collection<GrantedAuthority> grantedAuthorities = Collections.singleton(grantedAuthority);

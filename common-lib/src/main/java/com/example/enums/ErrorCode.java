@@ -31,6 +31,7 @@ public enum ErrorCode {
     FILE_TOO_LARGE(400, "File size exceeds the limit"),
     UNSUPPORTED_FILE_TYPE(400, "Unsupported file type, Only JPG, PNG, WEBP are allowed"),
     USER_CREATE_FAILED(400, "User creation failed"),
+    OTP_SAVE_FAILED(400, "OTP save failed"),
 
     
     // 401 UNAUTHORIZED
